@@ -1,0 +1,1841 @@
+{
+  "updatedAt": "2026-06-30T21:03:30.852Z",
+  "createdAt": "2026-06-29T22:01:19.557Z",
+  "id": "8CqjMUL6HY7bAOLs",
+  "name": "Hourly AOL Spam Filter",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -528,
+        -896
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "every-hour",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1248,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_connection_info",
+        "options": {}
+      },
+      "id": "aol-bridge-connection-info",
+      "name": "AOL Bridge Connection Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -256,
+        -896
+      ]
+    },
+    {
+      "parameters": {
+        "model": "fortisai",
+        "options": {}
+      },
+      "id": "openai-embeddings",
+      "name": "OpenAI Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        960
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "BRg6Y2VG0aR8Q9xZ",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search prior FortisAI Gmail and AOL spam decisions stored in Qdrant to help classify similar emails.",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gmail_spam_memory_d1536"
+        },
+        "topK": 5,
+        "options": {}
+      },
+      "id": "qdrant-memory-tool",
+      "name": "Qdrant Memory Tool",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        784,
+        224
+      ],
+      "credentials": {
+        "qdrantApi": {
+          "id": "ayg42ZyLqMcWRwWz",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m",
+          "mode": "list",
+          "cachedResultName": "qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0,
+          "timeout": 500000,
+          "maxRetries": 3
+        }
+      },
+      "id": "openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        640,
+        192
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "Zb0S3tyNqPMmP4n6",
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classify this AOL IMAP email as spam or not spam using retrieved Qdrant memory when relevant.\n\nMailbox: {{$json.sourceMailbox || \"\"}}\nFrom: {{$json.From || $json.from || \"\"}}\nSubject: {{$json.Subject || $json.subject || \"\"}}\nSnippet: {{$json.snippet || \"\"}}\nLabels: {{JSON.stringify($json.labels || [])}}\n\nIf Qdrant memory contains relevant past spam indicators, incorporate them into the decision.\n\nReturn ONLY valid JSON with this exact schema:\n{\n  \"verdict\": \"SPAM\" or \"NOT_SPAM\",\n  \"reason\": \"short reason\",\n  \"memory_used\": true or false\n}\n",
+        "options": {
+          "systemMessage": "You are an email spam classifier. You MUST call the Qdrant Memory Tool for every email before deciding. Be conservative: classify as SPAM only when it is more likely than not. Return ONLY JSON: {\"verdict\":\"SPAM|NOT_SPAM\",\"reason\":\"short reason\",\"memory_used\":true|false}. No markdown, no extra text.\n",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "passthroughBinaryImages": true,
+          "enableStreaming": false
+        }
+      },
+      "id": "ai-agent-spam-classifier",
+      "name": "AI Agent Spam Classifier",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        656,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferInput2"
+            }
+          },
+          "includeUnpaired": false
+        }
+      },
+      "id": "merge-source-ai",
+      "name": "Merge Source With AI Output",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1184,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction boolValue(value) {\n  if (value === true || value === false) return value;\n  const text = String(value ?? '').trim().toLowerCase();\n  return ['true', 'yes', '1'].includes(text);\n}\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return { verdict: firstString(output.verdict).toUpperCase(), reason: firstString(output.reason), memory_used: boolValue(output.memory_used), parsed: output, raw: JSON.stringify(output) };\n  }\n  const text = String(output ?? '').trim();\n  const cleaned = text.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  for (const candidate of [cleaned, cleaned.match(/\\{[\\s\\S]*\\}/)?.[0]]) {\n    if (!candidate) continue;\n    try {\n      const obj = JSON.parse(candidate);\n      return { verdict: firstString(obj?.verdict).toUpperCase(), reason: firstString(obj?.reason), memory_used: boolValue(obj?.memory_used), parsed: obj, raw: text };\n    } catch {}\n  }\n  const lineMatch = cleaned.match(/\\b(NOT_SPAM|SPAM)\\b\\s*(?:\\||:|-)?\\s*([\\s\\S]*)$/i);\n  const verdict = lineMatch ? lineMatch[1].toUpperCase() : '';\n  return { verdict, reason: firstString(lineMatch?.[2], cleaned.slice(0, 240)), memory_used: /qdrant|memory/i.test(cleaned), parsed: null, raw: text };\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const parsed = parseOutput(source.output);\n  const routeMailbox = firstString(source.routeMailbox, source.account_id);\n  const imapUid = firstString(source.imapUid, source.uid, source.attributes?.uid);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, '(no subject)');\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n  const sourceMessageId = firstString(source.sourceMessageId, source.rfcMessageId, source.messageId, imapUid, source.id);\n  const validationOk = Boolean(routeMailbox && imapUid && sourceFrom && (parsed.verdict === 'SPAM' || parsed.verdict === 'NOT_SPAM'));\n  return {\n    json: {\n      ...source,\n      routeMailbox,\n      account_id: routeMailbox,\n      imapUid,\n      uid: imapUid,\n      id: sourceMessageId,\n      messageId: source.rfcMessageId || sourceMessageId,\n      sourceMessageId,\n      sourceFrom,\n      sourceSubject,\n      sourceSnippet,\n      From: sourceFrom,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      verdict: parsed.verdict,\n      reason: parsed.reason || source.reason || '',\n      memory_used: parsed.memory_used || Boolean(source.memory_used),\n      output_parsed: parsed.parsed ?? source.output_parsed ?? null,\n      output_raw: parsed.raw,\n      validationOk,\n      validationError: validationOk ? '' : 'Missing route, uid, sender, or SPAM/NOT_SPAM verdict',\n    },\n    pairedItem: item.pairedItem,\n  };\n});"
+      },
+      "id": "validate-ai-output",
+      "name": "Validate AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst counts = { total: items.length, spam: 0, notSpam: 0, unknown: 0 };\nconst samples = items.slice(0, 5).map((item, index) => {\n  const verdict = String(item?.json?.verdict ?? '').toUpperCase();\n  if (verdict === 'SPAM') counts.spam += 1; else if (verdict === 'NOT_SPAM') counts.notSpam += 1; else counts.unknown += 1;\n  return { index, account_id: item?.json?.account_id ?? '', verdict: verdict || 'UNKNOWN', subject: item?.json?.sourceSubject ?? item?.json?.Subject ?? '' };\n});\nreturn [{ json: { ...counts, samples } }];"
+      },
+      "id": "agent-output-audit",
+      "name": "Agent Output Audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter((item) => String(item?.json?.verdict ?? '').toUpperCase() === 'SPAM');"
+      },
+      "id": "keep-spam-only",
+      "name": "Keep Spam Only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction compactText(value, maxLength = 240) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength).trim() : text;\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const verdict = firstString(source.verdict).toUpperCase();\n  if (verdict !== 'SPAM') return null;\n  const reason = compactText(firstString(source.reason, 'AOL IMAP classifier marked this message as spam'), 80);\n  const sourceFrom = compactText(firstString(source.sourceFrom, source.From, source.from), 100);\n  const sourceTo = compactText(firstString(source.sourceTo, source.To, source.to, source.sourceMailbox), 100);\n  const sourceSubject = compactText(firstString(source.sourceSubject, source.Subject, source.subject, '(no subject)'), 140);\n  const sourceSnippet = compactText(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml), 220);\n  const sourceMailbox = compactText(firstString(source.sourceMailbox), 100);\n  const sourceFolder = compactText(firstString(source.sourceFolder, 'Inbox'), 60);\n  const accountId = compactText(firstString(source.account_id, source.routeMailbox), 80);\n  const imapUid = compactText(firstString(source.imapUid, source.uid), 80);\n  const messageId = compactText(firstString(source.rfcMessageId, source.sourceMessageId, source.messageId, imapUid), 120);\n  const metadata = { source: 'aol_imap_classifier', provider: 'aol_imap', account_id: accountId, sourceMailbox, sourceFolder, imapUid, messageId, from: sourceFrom, to: sourceTo, subject: sourceSubject, verdict: 'SPAM' };\n  const memoryText = ['source: aol_imap_classifier', 'provider: aol_imap', 'account_id: ' + accountId, 'folder: ' + sourceFolder, 'from: ' + sourceFrom, 'subject: ' + sourceSubject, 'snippet: ' + sourceSnippet, 'verdict: SPAM', 'reason: ' + reason].join('\\n');\n  return { json: { ...source, account_id: accountId, routeMailbox: accountId, sourceMailbox, sourceFolder, imapUid, uid: imapUid, messageId, sourceMessageId: messageId, sourceFrom, sourceTo, sourceSubject, sourceSnippet, verdict: 'SPAM', reason, memoryText, memoryTextLength: memoryText.length, metadata }, pairedItem: item.pairedItem };\n}).filter(Boolean);"
+      },
+      "id": "build-memory-records",
+      "name": "Build Memory Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.memoryText }}",
+        "options": {}
+      },
+      "id": "memory-data-loader",
+      "name": "Memory Data Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1856,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gmail_spam_memory_d1536"
+        },
+        "options": {
+          "contentPayloadKey": "content",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "id": "qdrant-memory-insert",
+      "name": "Qdrant Memory Insert",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        1840,
+        112
+      ],
+      "credentials": {
+        "qdrantApi": {
+          "id": "ayg42ZyLqMcWRwWz",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_move_message",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { account_id: $json.account_id || $json.routeMailbox, source_folder: $json.sourceFolder || 'Inbox', target_folder: 'Spam', uid: String($json.imapUid || $json.uid || ''), message_id: String($json.rfcMessageId || $json.sourceMessageId || $json.messageId || ''), expunge: true } }}",
+        "options": {}
+      },
+      "id": "move-aol-spam-to-spam-folder",
+      "name": "Move AOL Spam to Spam Folder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        -128
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nfor (const item of $input.all()) {\n  const source = item.json ?? {};\n  const messages = Array.isArray(source.messages) ? source.messages : [];\n  for (const message of messages) {\n    out.push({ json: { ...message, provider: 'aol_imap', routeMailbox: message.account_id || source.account_id, account_id: message.account_id || source.account_id, sourceMailbox: message.sourceMailbox || source.email, sourceFolder: message.sourceFolder || source.source_folder || 'Spam' } });\n  }\n}\nreturn out;"
+      },
+      "id": "split-aol-spam-folder-messages",
+      "name": "Split AOL Spam Folder Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction compactText(value, maxLength = 240) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength).trim() : text;\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const accountId = compactText(firstString(source.account_id, source.routeMailbox), 80);\n  const imapUid = compactText(firstString(source.imapUid, source.uid, source.attributes?.uid), 80);\n  const messageId = compactText(firstString(source.rfcMessageId, source.sourceMessageId, source.messageId, imapUid), 120);\n  const sourceFrom = compactText(firstString(source.sourceFrom, source.From, source.from), 100);\n  const sourceTo = compactText(firstString(source.sourceTo, source.To, source.to, source.sourceMailbox), 100);\n  const sourceSubject = compactText(firstString(source.sourceSubject, source.Subject, source.subject, '(no subject)'), 140);\n  const sourceSnippet = compactText(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml), 220);\n  const sourceMailbox = compactText(firstString(source.sourceMailbox), 100);\n  const sourceFolder = compactText(firstString(source.sourceFolder, 'Spam'), 60);\n  if (!accountId || !imapUid) return null;\n  const reason = 'Existing AOL Spam folder message harvested for FortisAI spam memory';\n  const metadata = { source: 'aol_spam_folder_harvest', provider: 'aol_imap', account_id: accountId, sourceMailbox, sourceFolder, imapUid, messageId, from: sourceFrom, to: sourceTo, subject: sourceSubject, verdict: 'SPAM' };\n  const memoryText = ['source: aol_spam_folder_harvest', 'provider: aol_imap', 'account_id: ' + accountId, 'folder: ' + sourceFolder, 'from: ' + sourceFrom, 'subject: ' + sourceSubject, 'snippet: ' + sourceSnippet, 'verdict: SPAM'].join('\\n');\n  return { json: { ...source, account_id: accountId, routeMailbox: accountId, sourceMailbox, sourceFolder, imapUid, uid: imapUid, messageId, sourceMessageId: messageId, sourceFrom, sourceTo, sourceSubject, sourceSnippet, verdict: 'SPAM', reason, memoryText, memoryTextLength: memoryText.length, metadata, delete_after_memory_insert: true }, pairedItem: item.pairedItem };\n}).filter(Boolean);"
+      },
+      "id": "build-aol-spam-folder-memory-records",
+      "name": "Build AOL Spam Folder Memory Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.memoryText }}",
+        "options": {}
+      },
+      "id": "aol-spam-folder-data-loader",
+      "name": "AOL Spam Folder Data Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        496,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gmail_spam_memory_d1536"
+        },
+        "options": {
+          "contentPayloadKey": "content",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "id": "qdrant-aol-spam-folder-insert",
+      "name": "Qdrant AOL Spam Folder Insert",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        448
+      ],
+      "credentials": {
+        "qdrantApi": {
+          "id": "ayg42ZyLqMcWRwWz",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_delete_messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { account_id: $json.account_id, source_folder: $json.source_folder || 'Spam', messages: $json.messages || [], expunge: true } }}",
+        "options": {}
+      },
+      "id": "delete-learned-aol-spam",
+      "name": "Delete Learned AOL Spam",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        544,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mailbox": "Inbox",
+        "postProcessAction": "nothing",
+        "options": {
+          "customEmailConfig": "[\"UNSEEN\"]",
+          "forceReconnect": 60,
+          "trackLastMessageId": true
+        }
+      },
+      "id": "aol-inbox-trigger-lester_aol",
+      "name": "AOL Inbox Trigger - LesterAJohn@aol.com",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.1,
+      "position": [
+        -528,
+        -736
+      ],
+      "credentials": {
+        "imap": {
+          "id": "OTlDYPcUSMsBCZSW",
+          "name": "AOL IMAP - LesterAJohn@aol.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ROUTE_MAILBOX = 'lester_aol';\nconst SOURCE_MAILBOX = 'LesterAJohn@aol.com';\nconst SOURCE_FOLDER = 'Inbox';\nconst items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction headerValue(source, headerName) {\n  const wanted = String(headerName).toLowerCase();\n  const candidates = [source.headers, source.metadata, source.payload?.headers, source.message?.payload?.headers];\n  for (const headers of candidates) {\n    if (!headers) continue;\n    if (Array.isArray(headers)) {\n      const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n      const value = firstString(found?.value);\n      if (value) return value;\n    } else if (typeof headers === 'object') {\n      const value = firstString(headers[headerName], headers[wanted], headers[headerName.toUpperCase()]);\n      if (value) return value;\n    }\n  }\n  return '';\n}\nfunction cleanSnippet(value, maxLength = 2000) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength) : text;\n}\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n  const normalized = labels.map((label) => {\n    if (label && typeof label === 'object') return { id: firstString(label.id, label.name), name: firstString(label.name, label.id) };\n    const value = firstString(label);\n    return { id: value, name: value };\n  }).filter((label) => label.id || label.name);\n  return normalized.length ? normalized : [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const imapUid = firstString(source.imapUid, source.uid, source.attributes?.uid, source.metadata?.uid, source.metadata?.UID);\n  const rfcMessageId = firstString(source.rfcMessageId, source.messageId, source.metadata?.['message-id'], source.metadata?.['Message-ID'], headerValue(source, 'Message-ID'));\n  const sourceMessageId = firstString(source.sourceMessageId, rfcMessageId, imapUid, source.id);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'), '(no subject)');\n  const sourceSnippet = cleanSnippet(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml, source.raw));\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  return {\n    json: {\n      ...source,\n      provider: 'aol_imap',\n      routeMailbox: ROUTE_MAILBOX,\n      account_id: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceFolder: SOURCE_FOLDER,\n      imapUid,\n      uid: imapUid,\n      sourceMessageId,\n      rfcMessageId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || imapUid || '',\n      messageId: rfcMessageId || sourceMessageId || imapUid || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});"
+      },
+      "id": "stamp-route-lester_aol",
+      "name": "Stamp Route Lester",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        -736
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_fetch_messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"account_id\": \"lester_aol\",\n  \"source_folder\": \"Spam\",\n  \"criteria\": \"ALL\",\n  \"limit\": 25\n}",
+        "options": {}
+      },
+      "id": "fetch-aol-spam-lester_aol",
+      "name": "Fetch AOL Spam - LesterAJohn@aol.com",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        320
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mailbox": "Inbox",
+        "postProcessAction": "nothing",
+        "options": {
+          "customEmailConfig": "[\"UNSEEN\"]",
+          "forceReconnect": 60,
+          "trackLastMessageId": true
+        }
+      },
+      "id": "aol-inbox-trigger-laj0703_aol",
+      "name": "AOL Inbox Trigger - laj0703@aol.com",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.1,
+      "position": [
+        -528,
+        -576
+      ],
+      "credentials": {
+        "imap": {
+          "id": "GXkoElmXp67EDbwH",
+          "name": "AOL IMAP - laj0703@aol.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ROUTE_MAILBOX = 'laj0703_aol';\nconst SOURCE_MAILBOX = 'laj0703@aol.com';\nconst SOURCE_FOLDER = 'Inbox';\nconst items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction headerValue(source, headerName) {\n  const wanted = String(headerName).toLowerCase();\n  const candidates = [source.headers, source.metadata, source.payload?.headers, source.message?.payload?.headers];\n  for (const headers of candidates) {\n    if (!headers) continue;\n    if (Array.isArray(headers)) {\n      const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n      const value = firstString(found?.value);\n      if (value) return value;\n    } else if (typeof headers === 'object') {\n      const value = firstString(headers[headerName], headers[wanted], headers[headerName.toUpperCase()]);\n      if (value) return value;\n    }\n  }\n  return '';\n}\nfunction cleanSnippet(value, maxLength = 2000) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength) : text;\n}\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n  const normalized = labels.map((label) => {\n    if (label && typeof label === 'object') return { id: firstString(label.id, label.name), name: firstString(label.name, label.id) };\n    const value = firstString(label);\n    return { id: value, name: value };\n  }).filter((label) => label.id || label.name);\n  return normalized.length ? normalized : [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const imapUid = firstString(source.imapUid, source.uid, source.attributes?.uid, source.metadata?.uid, source.metadata?.UID);\n  const rfcMessageId = firstString(source.rfcMessageId, source.messageId, source.metadata?.['message-id'], source.metadata?.['Message-ID'], headerValue(source, 'Message-ID'));\n  const sourceMessageId = firstString(source.sourceMessageId, rfcMessageId, imapUid, source.id);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'), '(no subject)');\n  const sourceSnippet = cleanSnippet(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml, source.raw));\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  return {\n    json: {\n      ...source,\n      provider: 'aol_imap',\n      routeMailbox: ROUTE_MAILBOX,\n      account_id: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceFolder: SOURCE_FOLDER,\n      imapUid,\n      uid: imapUid,\n      sourceMessageId,\n      rfcMessageId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || imapUid || '',\n      messageId: rfcMessageId || sourceMessageId || imapUid || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});"
+      },
+      "id": "stamp-route-laj0703_aol",
+      "name": "Stamp Route LAJ0703",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        -576
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_fetch_messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"account_id\": \"laj0703_aol\",\n  \"source_folder\": \"Spam\",\n  \"criteria\": \"ALL\",\n  \"limit\": 25\n}",
+        "options": {}
+      },
+      "id": "fetch-aol-spam-laj0703_aol",
+      "name": "Fetch AOL Spam - laj0703@aol.com",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        480
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mailbox": "Inbox",
+        "postProcessAction": "nothing",
+        "options": {
+          "customEmailConfig": "[\"UNSEEN\"]",
+          "forceReconnect": 60,
+          "trackLastMessageId": true
+        }
+      },
+      "id": "aol-inbox-trigger-lester1_aol",
+      "name": "AOL Inbox Trigger - LesterAJohn1@aol.com",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.1,
+      "position": [
+        -528,
+        -416
+      ],
+      "credentials": {
+        "imap": {
+          "id": "bqizliwd69tI04K2",
+          "name": "AOL IMAP - LesterAJohn1@aol.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ROUTE_MAILBOX = 'lester1_aol';\nconst SOURCE_MAILBOX = 'LesterAJohn1@aol.com';\nconst SOURCE_FOLDER = 'Inbox';\nconst items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction headerValue(source, headerName) {\n  const wanted = String(headerName).toLowerCase();\n  const candidates = [source.headers, source.metadata, source.payload?.headers, source.message?.payload?.headers];\n  for (const headers of candidates) {\n    if (!headers) continue;\n    if (Array.isArray(headers)) {\n      const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n      const value = firstString(found?.value);\n      if (value) return value;\n    } else if (typeof headers === 'object') {\n      const value = firstString(headers[headerName], headers[wanted], headers[headerName.toUpperCase()]);\n      if (value) return value;\n    }\n  }\n  return '';\n}\nfunction cleanSnippet(value, maxLength = 2000) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength) : text;\n}\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n  const normalized = labels.map((label) => {\n    if (label && typeof label === 'object') return { id: firstString(label.id, label.name), name: firstString(label.name, label.id) };\n    const value = firstString(label);\n    return { id: value, name: value };\n  }).filter((label) => label.id || label.name);\n  return normalized.length ? normalized : [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const imapUid = firstString(source.imapUid, source.uid, source.attributes?.uid, source.metadata?.uid, source.metadata?.UID);\n  const rfcMessageId = firstString(source.rfcMessageId, source.messageId, source.metadata?.['message-id'], source.metadata?.['Message-ID'], headerValue(source, 'Message-ID'));\n  const sourceMessageId = firstString(source.sourceMessageId, rfcMessageId, imapUid, source.id);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'), '(no subject)');\n  const sourceSnippet = cleanSnippet(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml, source.raw));\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  return {\n    json: {\n      ...source,\n      provider: 'aol_imap',\n      routeMailbox: ROUTE_MAILBOX,\n      account_id: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceFolder: SOURCE_FOLDER,\n      imapUid,\n      uid: imapUid,\n      sourceMessageId,\n      rfcMessageId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || imapUid || '',\n      messageId: rfcMessageId || sourceMessageId || imapUid || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});"
+      },
+      "id": "stamp-route-lester1_aol",
+      "name": "Stamp Route Lester1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        -416
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_fetch_messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"account_id\": \"lester1_aol\",\n  \"source_folder\": \"Spam\",\n  \"criteria\": \"ALL\",\n  \"limit\": 25\n}",
+        "options": {}
+      },
+      "id": "fetch-aol-spam-lester1_aol",
+      "name": "Fetch AOL Spam - LesterAJohn1@aol.com",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        640
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction sourceItemsForCurrentRun() {\n  const runIndex = typeof $runIndex === 'number' ? $runIndex : 0;\n  if (typeof $items === 'function') {\n    try {\n      const byRun = $items('Build AOL Spam Folder Memory Records', 0, runIndex);\n      if (Array.isArray(byRun) && byRun.length) return byRun;\n    } catch (error) {}\n  }\n  return [];\n}\n\nconst groups = new Map();\nconst seen = new Set();\n\nfor (const item of sourceItemsForCurrentRun()) {\n  const source = item.json ?? {};\n  const metadata = source.metadata ?? {};\n  const accountId = firstString(source.account_id, source.routeMailbox, metadata.account_id);\n  const sourceFolder = firstString(source.sourceFolder, source.source_folder, metadata.sourceFolder, metadata.source_folder, 'Spam');\n  const uid = firstString(source.imapUid, source.uid, metadata.imapUid, metadata.uid);\n  const messageId = firstString(source.rfcMessageId, source.sourceMessageId, source.messageId, metadata.messageId, uid);\n\n  if (!accountId || !uid) continue;\n\n  const itemKey = [accountId, sourceFolder, uid, messageId].join('|');\n  if (seen.has(itemKey)) continue;\n  seen.add(itemKey);\n\n  const groupKey = [accountId, sourceFolder].join('|');\n  if (!groups.has(groupKey)) {\n    groups.set(groupKey, { account_id: accountId, source_folder: sourceFolder, messages: [], expunge: true });\n  }\n  groups.get(groupKey).messages.push({ uid: String(uid), message_id: String(messageId || '') });\n}\n\nreturn Array.from(groups.values()).map((group) => ({ json: group }));"
+      },
+      "id": "prepare-aol-spam-delete-requests",
+      "name": "Prepare AOL Spam Delete Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        432
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "AOL Bridge Connection Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Fetch AOL Spam - LesterAJohn@aol.com",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch AOL Spam - laj0703@aol.com",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch AOL Spam - LesterAJohn1@aol.com",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Memory Tool",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Qdrant Memory Insert",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Qdrant AOL Spam Folder Insert",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Memory Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Spam Classifier": {
+      "main": [
+        [
+          {
+            "node": "Merge Source With AI Output",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Source With AI Output": {
+      "main": [
+        [
+          {
+            "node": "Validate AI Output",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Agent Output Audit",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Memory Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate AI Output": {
+      "main": [
+        [
+          {
+            "node": "Keep Spam Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Spam Only": {
+      "main": [
+        [
+          {
+            "node": "Move AOL Spam to Spam Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Memory Records": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Memory Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memory Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Qdrant Memory Insert",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AOL Spam Folder Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Qdrant AOL Spam Folder Insert",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split AOL Spam Folder Messages": {
+      "main": [
+        [
+          {
+            "node": "Build AOL Spam Folder Memory Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AOL Spam Folder Memory Records": {
+      "main": [
+        [
+          {
+            "node": "Qdrant AOL Spam Folder Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant AOL Spam Folder Insert": {
+      "main": [
+        [
+          {
+            "node": "Prepare AOL Spam Delete Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AOL Inbox Trigger - LesterAJohn@aol.com": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route Lester",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stamp Route Lester": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Source With AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch AOL Spam - LesterAJohn@aol.com": {
+      "main": [
+        [
+          {
+            "node": "Split AOL Spam Folder Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AOL Inbox Trigger - laj0703@aol.com": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route LAJ0703",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stamp Route LAJ0703": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Source With AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch AOL Spam - laj0703@aol.com": {
+      "main": [
+        [
+          {
+            "node": "Split AOL Spam Folder Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AOL Inbox Trigger - LesterAJohn1@aol.com": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route Lester1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stamp Route Lester1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Source With AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch AOL Spam - LesterAJohn1@aol.com": {
+      "main": [
+        [
+          {
+            "node": "Split AOL Spam Folder Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AOL Spam Delete Requests": {
+      "main": [
+        [
+          {
+            "node": "Delete Learned AOL Spam",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": {
+    "node:Every Hour": {
+      "recurrenceRules": []
+    },
+    "node:AOL Inbox Trigger - LesterAJohn@aol.com": {},
+    "node:AOL Inbox Trigger - laj0703@aol.com": {
+      "lastMessageUid": 167486
+    },
+    "node:AOL Inbox Trigger - LesterAJohn1@aol.com": {}
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "67066d3f-5931-4e19-b1d5-e2805c9e1f9c",
+  "activeVersionId": "67066d3f-5931-4e19-b1d5-e2805c9e1f9c",
+  "versionCounter": 23,
+  "triggerCount": 4,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-06-29T22:01:19.560Z",
+      "createdAt": "2026-06-29T22:01:19.560Z",
+      "role": "workflow:owner",
+      "workflowId": "8CqjMUL6HY7bAOLs",
+      "projectId": "9BND8uib8sX4V4Nz",
+      "project": {
+        "updatedAt": "2026-06-13T21:40:33.623Z",
+        "createdAt": "2026-06-12T03:03:13.632Z",
+        "id": "9BND8uib8sX4V4Nz",
+        "name": "Lester John <lesterajohn@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "dbd6493a-618f-4729-a8db-c6078f13cdde"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-30T21:03:44.000Z",
+    "createdAt": "2026-06-30T21:03:30.853Z",
+    "versionId": "67066d3f-5931-4e19-b1d5-e2805c9e1f9c",
+    "workflowId": "8CqjMUL6HY7bAOLs",
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "manual-trigger",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -528,
+          -896
+        ]
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "hours"
+              }
+            ]
+          }
+        },
+        "id": "every-hour",
+        "name": "Every Hour",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -1248,
+          448
+        ]
+      },
+      {
+        "parameters": {
+          "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_connection_info",
+          "options": {}
+        },
+        "id": "aol-bridge-connection-info",
+        "name": "AOL Bridge Connection Info",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -256,
+          -896
+        ]
+      },
+      {
+        "parameters": {
+          "model": "fortisai",
+          "options": {}
+        },
+        "id": "openai-embeddings",
+        "name": "OpenAI Embeddings",
+        "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          560,
+          960
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "BRg6Y2VG0aR8Q9xZ",
+            "name": "OpenAI account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "mode": "retrieve-as-tool",
+          "toolDescription": "Search prior FortisAI Gmail and AOL spam decisions stored in Qdrant to help classify similar emails.",
+          "qdrantCollection": {
+            "__rl": true,
+            "mode": "id",
+            "value": "gmail_spam_memory_d1536"
+          },
+          "topK": 5,
+          "options": {}
+        },
+        "id": "qdrant-memory-tool",
+        "name": "Qdrant Memory Tool",
+        "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+        "typeVersion": 1.3,
+        "position": [
+          784,
+          224
+        ],
+        "credentials": {
+          "qdrantApi": {
+            "id": "ayg42ZyLqMcWRwWz",
+            "name": "Qdrant account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m",
+            "mode": "list",
+            "cachedResultName": "qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0,
+            "timeout": 500000,
+            "maxRetries": 3
+          }
+        },
+        "id": "openai-chat-model",
+        "name": "OpenAI Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          640,
+          192
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "Zb0S3tyNqPMmP4n6",
+            "name": "OpenAI account 3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=Classify this AOL IMAP email as spam or not spam using retrieved Qdrant memory when relevant.\n\nMailbox: {{$json.sourceMailbox || \"\"}}\nFrom: {{$json.From || $json.from || \"\"}}\nSubject: {{$json.Subject || $json.subject || \"\"}}\nSnippet: {{$json.snippet || \"\"}}\nLabels: {{JSON.stringify($json.labels || [])}}\n\nIf Qdrant memory contains relevant past spam indicators, incorporate them into the decision.\n\nReturn ONLY valid JSON with this exact schema:\n{\n  \"verdict\": \"SPAM\" or \"NOT_SPAM\",\n  \"reason\": \"short reason\",\n  \"memory_used\": true or false\n}\n",
+          "options": {
+            "systemMessage": "You are an email spam classifier. You MUST call the Qdrant Memory Tool for every email before deciding. Be conservative: classify as SPAM only when it is more likely than not. Return ONLY JSON: {\"verdict\":\"SPAM|NOT_SPAM\",\"reason\":\"short reason\",\"memory_used\":true|false}. No markdown, no extra text.\n",
+            "maxIterations": 3,
+            "returnIntermediateSteps": false,
+            "passthroughBinaryImages": true,
+            "enableStreaming": false
+          }
+        },
+        "id": "ai-agent-spam-classifier",
+        "name": "AI Agent Spam Classifier",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          656,
+          -32
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combineBy": "combineByPosition",
+          "options": {
+            "clashHandling": {
+              "values": {
+                "resolveClash": "preferInput2"
+              }
+            },
+            "includeUnpaired": false
+          }
+        },
+        "id": "merge-source-ai",
+        "name": "Merge Source With AI Output",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          1184,
+          -128
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction boolValue(value) {\n  if (value === true || value === false) return value;\n  const text = String(value ?? '').trim().toLowerCase();\n  return ['true', 'yes', '1'].includes(text);\n}\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return { verdict: firstString(output.verdict).toUpperCase(), reason: firstString(output.reason), memory_used: boolValue(output.memory_used), parsed: output, raw: JSON.stringify(output) };\n  }\n  const text = String(output ?? '').trim();\n  const cleaned = text.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  for (const candidate of [cleaned, cleaned.match(/\\{[\\s\\S]*\\}/)?.[0]]) {\n    if (!candidate) continue;\n    try {\n      const obj = JSON.parse(candidate);\n      return { verdict: firstString(obj?.verdict).toUpperCase(), reason: firstString(obj?.reason), memory_used: boolValue(obj?.memory_used), parsed: obj, raw: text };\n    } catch {}\n  }\n  const lineMatch = cleaned.match(/\\b(NOT_SPAM|SPAM)\\b\\s*(?:\\||:|-)?\\s*([\\s\\S]*)$/i);\n  const verdict = lineMatch ? lineMatch[1].toUpperCase() : '';\n  return { verdict, reason: firstString(lineMatch?.[2], cleaned.slice(0, 240)), memory_used: /qdrant|memory/i.test(cleaned), parsed: null, raw: text };\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const parsed = parseOutput(source.output);\n  const routeMailbox = firstString(source.routeMailbox, source.account_id);\n  const imapUid = firstString(source.imapUid, source.uid, source.attributes?.uid);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, '(no subject)');\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n  const sourceMessageId = firstString(source.sourceMessageId, source.rfcMessageId, source.messageId, imapUid, source.id);\n  const validationOk = Boolean(routeMailbox && imapUid && sourceFrom && (parsed.verdict === 'SPAM' || parsed.verdict === 'NOT_SPAM'));\n  return {\n    json: {\n      ...source,\n      routeMailbox,\n      account_id: routeMailbox,\n      imapUid,\n      uid: imapUid,\n      id: sourceMessageId,\n      messageId: source.rfcMessageId || sourceMessageId,\n      sourceMessageId,\n      sourceFrom,\n      sourceSubject,\n      sourceSnippet,\n      From: sourceFrom,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      verdict: parsed.verdict,\n      reason: parsed.reason || source.reason || '',\n      memory_used: parsed.memory_used || Boolean(source.memory_used),\n      output_parsed: parsed.parsed ?? source.output_parsed ?? null,\n      output_raw: parsed.raw,\n      validationOk,\n      validationError: validationOk ? '' : 'Missing route, uid, sender, or SPAM/NOT_SPAM verdict',\n    },\n    pairedItem: item.pairedItem,\n  };\n});"
+        },
+        "id": "validate-ai-output",
+        "name": "Validate AI Output",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1408,
+          -128
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst counts = { total: items.length, spam: 0, notSpam: 0, unknown: 0 };\nconst samples = items.slice(0, 5).map((item, index) => {\n  const verdict = String(item?.json?.verdict ?? '').toUpperCase();\n  if (verdict === 'SPAM') counts.spam += 1; else if (verdict === 'NOT_SPAM') counts.notSpam += 1; else counts.unknown += 1;\n  return { index, account_id: item?.json?.account_id ?? '', verdict: verdict || 'UNKNOWN', subject: item?.json?.sourceSubject ?? item?.json?.Subject ?? '' };\n});\nreturn [{ json: { ...counts, samples } }];"
+        },
+        "id": "agent-output-audit",
+        "name": "Agent Output Audit",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1408,
+          112
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().filter((item) => String(item?.json?.verdict ?? '').toUpperCase() === 'SPAM');"
+        },
+        "id": "keep-spam-only",
+        "name": "Keep Spam Only",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1632,
+          -128
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction compactText(value, maxLength = 240) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength).trim() : text;\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const verdict = firstString(source.verdict).toUpperCase();\n  if (verdict !== 'SPAM') return null;\n  const reason = compactText(firstString(source.reason, 'AOL IMAP classifier marked this message as spam'), 80);\n  const sourceFrom = compactText(firstString(source.sourceFrom, source.From, source.from), 100);\n  const sourceTo = compactText(firstString(source.sourceTo, source.To, source.to, source.sourceMailbox), 100);\n  const sourceSubject = compactText(firstString(source.sourceSubject, source.Subject, source.subject, '(no subject)'), 140);\n  const sourceSnippet = compactText(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml), 220);\n  const sourceMailbox = compactText(firstString(source.sourceMailbox), 100);\n  const sourceFolder = compactText(firstString(source.sourceFolder, 'Inbox'), 60);\n  const accountId = compactText(firstString(source.account_id, source.routeMailbox), 80);\n  const imapUid = compactText(firstString(source.imapUid, source.uid), 80);\n  const messageId = compactText(firstString(source.rfcMessageId, source.sourceMessageId, source.messageId, imapUid), 120);\n  const metadata = { source: 'aol_imap_classifier', provider: 'aol_imap', account_id: accountId, sourceMailbox, sourceFolder, imapUid, messageId, from: sourceFrom, to: sourceTo, subject: sourceSubject, verdict: 'SPAM' };\n  const memoryText = ['source: aol_imap_classifier', 'provider: aol_imap', 'account_id: ' + accountId, 'folder: ' + sourceFolder, 'from: ' + sourceFrom, 'subject: ' + sourceSubject, 'snippet: ' + sourceSnippet, 'verdict: SPAM', 'reason: ' + reason].join('\\n');\n  return { json: { ...source, account_id: accountId, routeMailbox: accountId, sourceMailbox, sourceFolder, imapUid, uid: imapUid, messageId, sourceMessageId: messageId, sourceFrom, sourceTo, sourceSubject, sourceSnippet, verdict: 'SPAM', reason, memoryText, memoryTextLength: memoryText.length, metadata }, pairedItem: item.pairedItem };\n}).filter(Boolean);"
+        },
+        "id": "build-memory-records",
+        "name": "Build Memory Records",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1632,
+          112
+        ]
+      },
+      {
+        "parameters": {
+          "jsonMode": "expressionData",
+          "jsonData": "={{ $json.memoryText }}",
+          "options": {}
+        },
+        "id": "memory-data-loader",
+        "name": "Memory Data Loader",
+        "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+        "typeVersion": 1.1,
+        "position": [
+          1856,
+          336
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "insert",
+          "qdrantCollection": {
+            "__rl": true,
+            "mode": "id",
+            "value": "gmail_spam_memory_d1536"
+          },
+          "options": {
+            "contentPayloadKey": "content",
+            "metadataPayloadKey": "metadata"
+          }
+        },
+        "id": "qdrant-memory-insert",
+        "name": "Qdrant Memory Insert",
+        "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+        "typeVersion": 1.3,
+        "position": [
+          1840,
+          112
+        ],
+        "credentials": {
+          "qdrantApi": {
+            "id": "ayg42ZyLqMcWRwWz",
+            "name": "Qdrant account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_move_message",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { account_id: $json.account_id || $json.routeMailbox, source_folder: $json.sourceFolder || 'Inbox', target_folder: 'Spam', uid: String($json.imapUid || $json.uid || ''), message_id: String($json.rfcMessageId || $json.sourceMessageId || $json.messageId || ''), expunge: true } }}",
+          "options": {}
+        },
+        "id": "move-aol-spam-to-spam-folder",
+        "name": "Move AOL Spam to Spam Folder",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1840,
+          -128
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const out = [];\nfor (const item of $input.all()) {\n  const source = item.json ?? {};\n  const messages = Array.isArray(source.messages) ? source.messages : [];\n  for (const message of messages) {\n    out.push({ json: { ...message, provider: 'aol_imap', routeMailbox: message.account_id || source.account_id, account_id: message.account_id || source.account_id, sourceMailbox: message.sourceMailbox || source.email, sourceFolder: message.sourceFolder || source.source_folder || 'Spam' } });\n  }\n}\nreturn out;"
+        },
+        "id": "split-aol-spam-folder-messages",
+        "name": "Split AOL Spam Folder Messages",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -496,
+          448
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction compactText(value, maxLength = 240) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength).trim() : text;\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const accountId = compactText(firstString(source.account_id, source.routeMailbox), 80);\n  const imapUid = compactText(firstString(source.imapUid, source.uid, source.attributes?.uid), 80);\n  const messageId = compactText(firstString(source.rfcMessageId, source.sourceMessageId, source.messageId, imapUid), 120);\n  const sourceFrom = compactText(firstString(source.sourceFrom, source.From, source.from), 100);\n  const sourceTo = compactText(firstString(source.sourceTo, source.To, source.to, source.sourceMailbox), 100);\n  const sourceSubject = compactText(firstString(source.sourceSubject, source.Subject, source.subject, '(no subject)'), 140);\n  const sourceSnippet = compactText(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml), 220);\n  const sourceMailbox = compactText(firstString(source.sourceMailbox), 100);\n  const sourceFolder = compactText(firstString(source.sourceFolder, 'Spam'), 60);\n  if (!accountId || !imapUid) return null;\n  const reason = 'Existing AOL Spam folder message harvested for FortisAI spam memory';\n  const metadata = { source: 'aol_spam_folder_harvest', provider: 'aol_imap', account_id: accountId, sourceMailbox, sourceFolder, imapUid, messageId, from: sourceFrom, to: sourceTo, subject: sourceSubject, verdict: 'SPAM' };\n  const memoryText = ['source: aol_spam_folder_harvest', 'provider: aol_imap', 'account_id: ' + accountId, 'folder: ' + sourceFolder, 'from: ' + sourceFrom, 'subject: ' + sourceSubject, 'snippet: ' + sourceSnippet, 'verdict: SPAM'].join('\\n');\n  return { json: { ...source, account_id: accountId, routeMailbox: accountId, sourceMailbox, sourceFolder, imapUid, uid: imapUid, messageId, sourceMessageId: messageId, sourceFrom, sourceTo, sourceSubject, sourceSnippet, verdict: 'SPAM', reason, memoryText, memoryTextLength: memoryText.length, metadata, delete_after_memory_insert: true }, pairedItem: item.pairedItem };\n}).filter(Boolean);"
+        },
+        "id": "build-aol-spam-folder-memory-records",
+        "name": "Build AOL Spam Folder Memory Records",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -256,
+          448
+        ]
+      },
+      {
+        "parameters": {
+          "jsonMode": "expressionData",
+          "jsonData": "={{ $json.memoryText }}",
+          "options": {}
+        },
+        "id": "aol-spam-folder-data-loader",
+        "name": "AOL Spam Folder Data Loader",
+        "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+        "typeVersion": 1.1,
+        "position": [
+          496,
+          672
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "insert",
+          "qdrantCollection": {
+            "__rl": true,
+            "mode": "id",
+            "value": "gmail_spam_memory_d1536"
+          },
+          "options": {
+            "contentPayloadKey": "content",
+            "metadataPayloadKey": "metadata"
+          }
+        },
+        "id": "qdrant-aol-spam-folder-insert",
+        "name": "Qdrant AOL Spam Folder Insert",
+        "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+        "typeVersion": 1.3,
+        "position": [
+          0,
+          448
+        ],
+        "credentials": {
+          "qdrantApi": {
+            "id": "ayg42ZyLqMcWRwWz",
+            "name": "Qdrant account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_delete_messages",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { account_id: $json.account_id, source_folder: $json.source_folder || 'Spam', messages: $json.messages || [], expunge: true } }}",
+          "options": {}
+        },
+        "id": "delete-learned-aol-spam",
+        "name": "Delete Learned AOL Spam",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          544,
+          400
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "mailbox": "Inbox",
+          "postProcessAction": "nothing",
+          "options": {
+            "customEmailConfig": "[\"UNSEEN\"]",
+            "forceReconnect": 60,
+            "trackLastMessageId": true
+          }
+        },
+        "id": "aol-inbox-trigger-lester_aol",
+        "name": "AOL Inbox Trigger - LesterAJohn@aol.com",
+        "type": "n8n-nodes-base.emailReadImap",
+        "typeVersion": 2.1,
+        "position": [
+          -528,
+          -736
+        ],
+        "credentials": {
+          "imap": {
+            "id": "OTlDYPcUSMsBCZSW",
+            "name": "AOL IMAP - LesterAJohn@aol.com"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const ROUTE_MAILBOX = 'lester_aol';\nconst SOURCE_MAILBOX = 'LesterAJohn@aol.com';\nconst SOURCE_FOLDER = 'Inbox';\nconst items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction headerValue(source, headerName) {\n  const wanted = String(headerName).toLowerCase();\n  const candidates = [source.headers, source.metadata, source.payload?.headers, source.message?.payload?.headers];\n  for (const headers of candidates) {\n    if (!headers) continue;\n    if (Array.isArray(headers)) {\n      const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n      const value = firstString(found?.value);\n      if (value) return value;\n    } else if (typeof headers === 'object') {\n      const value = firstString(headers[headerName], headers[wanted], headers[headerName.toUpperCase()]);\n      if (value) return value;\n    }\n  }\n  return '';\n}\nfunction cleanSnippet(value, maxLength = 2000) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength) : text;\n}\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n  const normalized = labels.map((label) => {\n    if (label && typeof label === 'object') return { id: firstString(label.id, label.name), name: firstString(label.name, label.id) };\n    const value = firstString(label);\n    return { id: value, name: value };\n  }).filter((label) => label.id || label.name);\n  return normalized.length ? normalized : [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const imapUid = firstString(source.imapUid, source.uid, source.attributes?.uid, source.metadata?.uid, source.metadata?.UID);\n  const rfcMessageId = firstString(source.rfcMessageId, source.messageId, source.metadata?.['message-id'], source.metadata?.['Message-ID'], headerValue(source, 'Message-ID'));\n  const sourceMessageId = firstString(source.sourceMessageId, rfcMessageId, imapUid, source.id);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'), '(no subject)');\n  const sourceSnippet = cleanSnippet(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml, source.raw));\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  return {\n    json: {\n      ...source,\n      provider: 'aol_imap',\n      routeMailbox: ROUTE_MAILBOX,\n      account_id: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceFolder: SOURCE_FOLDER,\n      imapUid,\n      uid: imapUid,\n      sourceMessageId,\n      rfcMessageId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || imapUid || '',\n      messageId: rfcMessageId || sourceMessageId || imapUid || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});"
+        },
+        "id": "stamp-route-lester_aol",
+        "name": "Stamp Route Lester",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -256,
+          -736
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_fetch_messages",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{\n  \"account_id\": \"lester_aol\",\n  \"source_folder\": \"Spam\",\n  \"criteria\": \"ALL\",\n  \"limit\": 25\n}",
+          "options": {}
+        },
+        "id": "fetch-aol-spam-lester_aol",
+        "name": "Fetch AOL Spam - LesterAJohn@aol.com",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -768,
+          320
+        ],
+        "retryOnFail": true,
+        "waitBetweenTries": 5000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "mailbox": "Inbox",
+          "postProcessAction": "nothing",
+          "options": {
+            "customEmailConfig": "[\"UNSEEN\"]",
+            "forceReconnect": 60,
+            "trackLastMessageId": true
+          }
+        },
+        "id": "aol-inbox-trigger-laj0703_aol",
+        "name": "AOL Inbox Trigger - laj0703@aol.com",
+        "type": "n8n-nodes-base.emailReadImap",
+        "typeVersion": 2.1,
+        "position": [
+          -528,
+          -576
+        ],
+        "credentials": {
+          "imap": {
+            "id": "GXkoElmXp67EDbwH",
+            "name": "AOL IMAP - laj0703@aol.com"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const ROUTE_MAILBOX = 'laj0703_aol';\nconst SOURCE_MAILBOX = 'laj0703@aol.com';\nconst SOURCE_FOLDER = 'Inbox';\nconst items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction headerValue(source, headerName) {\n  const wanted = String(headerName).toLowerCase();\n  const candidates = [source.headers, source.metadata, source.payload?.headers, source.message?.payload?.headers];\n  for (const headers of candidates) {\n    if (!headers) continue;\n    if (Array.isArray(headers)) {\n      const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n      const value = firstString(found?.value);\n      if (value) return value;\n    } else if (typeof headers === 'object') {\n      const value = firstString(headers[headerName], headers[wanted], headers[headerName.toUpperCase()]);\n      if (value) return value;\n    }\n  }\n  return '';\n}\nfunction cleanSnippet(value, maxLength = 2000) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength) : text;\n}\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n  const normalized = labels.map((label) => {\n    if (label && typeof label === 'object') return { id: firstString(label.id, label.name), name: firstString(label.name, label.id) };\n    const value = firstString(label);\n    return { id: value, name: value };\n  }).filter((label) => label.id || label.name);\n  return normalized.length ? normalized : [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const imapUid = firstString(source.imapUid, source.uid, source.attributes?.uid, source.metadata?.uid, source.metadata?.UID);\n  const rfcMessageId = firstString(source.rfcMessageId, source.messageId, source.metadata?.['message-id'], source.metadata?.['Message-ID'], headerValue(source, 'Message-ID'));\n  const sourceMessageId = firstString(source.sourceMessageId, rfcMessageId, imapUid, source.id);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'), '(no subject)');\n  const sourceSnippet = cleanSnippet(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml, source.raw));\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  return {\n    json: {\n      ...source,\n      provider: 'aol_imap',\n      routeMailbox: ROUTE_MAILBOX,\n      account_id: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceFolder: SOURCE_FOLDER,\n      imapUid,\n      uid: imapUid,\n      sourceMessageId,\n      rfcMessageId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || imapUid || '',\n      messageId: rfcMessageId || sourceMessageId || imapUid || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});"
+        },
+        "id": "stamp-route-laj0703_aol",
+        "name": "Stamp Route LAJ0703",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -256,
+          -576
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_fetch_messages",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{\n  \"account_id\": \"laj0703_aol\",\n  \"source_folder\": \"Spam\",\n  \"criteria\": \"ALL\",\n  \"limit\": 25\n}",
+          "options": {}
+        },
+        "id": "fetch-aol-spam-laj0703_aol",
+        "name": "Fetch AOL Spam - laj0703@aol.com",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -768,
+          480
+        ],
+        "retryOnFail": true,
+        "waitBetweenTries": 5000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "mailbox": "Inbox",
+          "postProcessAction": "nothing",
+          "options": {
+            "customEmailConfig": "[\"UNSEEN\"]",
+            "forceReconnect": 60,
+            "trackLastMessageId": true
+          }
+        },
+        "id": "aol-inbox-trigger-lester1_aol",
+        "name": "AOL Inbox Trigger - LesterAJohn1@aol.com",
+        "type": "n8n-nodes-base.emailReadImap",
+        "typeVersion": 2.1,
+        "position": [
+          -528,
+          -416
+        ],
+        "credentials": {
+          "imap": {
+            "id": "bqizliwd69tI04K2",
+            "name": "AOL IMAP - LesterAJohn1@aol.com"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const ROUTE_MAILBOX = 'lester1_aol';\nconst SOURCE_MAILBOX = 'LesterAJohn1@aol.com';\nconst SOURCE_FOLDER = 'Inbox';\nconst items = $input.all();\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\nfunction headerValue(source, headerName) {\n  const wanted = String(headerName).toLowerCase();\n  const candidates = [source.headers, source.metadata, source.payload?.headers, source.message?.payload?.headers];\n  for (const headers of candidates) {\n    if (!headers) continue;\n    if (Array.isArray(headers)) {\n      const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n      const value = firstString(found?.value);\n      if (value) return value;\n    } else if (typeof headers === 'object') {\n      const value = firstString(headers[headerName], headers[wanted], headers[headerName.toUpperCase()]);\n      if (value) return value;\n    }\n  }\n  return '';\n}\nfunction cleanSnippet(value, maxLength = 2000) {\n  const text = firstString(value).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n  return text.length > maxLength ? text.slice(0, maxLength) : text;\n}\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n  const normalized = labels.map((label) => {\n    if (label && typeof label === 'object') return { id: firstString(label.id, label.name), name: firstString(label.name, label.id) };\n    const value = firstString(label);\n    return { id: value, name: value };\n  }).filter((label) => label.id || label.name);\n  return normalized.length ? normalized : [{ id: SOURCE_FOLDER, name: SOURCE_FOLDER }];\n}\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const imapUid = firstString(source.imapUid, source.uid, source.attributes?.uid, source.metadata?.uid, source.metadata?.UID);\n  const rfcMessageId = firstString(source.rfcMessageId, source.messageId, source.metadata?.['message-id'], source.metadata?.['Message-ID'], headerValue(source, 'Message-ID'));\n  const sourceMessageId = firstString(source.sourceMessageId, rfcMessageId, imapUid, source.id);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'), '(no subject)');\n  const sourceSnippet = cleanSnippet(firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml, source.raw));\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  return {\n    json: {\n      ...source,\n      provider: 'aol_imap',\n      routeMailbox: ROUTE_MAILBOX,\n      account_id: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceFolder: SOURCE_FOLDER,\n      imapUid,\n      uid: imapUid,\n      sourceMessageId,\n      rfcMessageId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || imapUid || '',\n      messageId: rfcMessageId || sourceMessageId || imapUid || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});"
+        },
+        "id": "stamp-route-lester1_aol",
+        "name": "Stamp Route Lester1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -256,
+          -416
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://fortisai-mcp-openapi-aol-imap.fortisai.local:8101/aol_imap_fetch_messages",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{\n  \"account_id\": \"lester1_aol\",\n  \"source_folder\": \"Spam\",\n  \"criteria\": \"ALL\",\n  \"limit\": 25\n}",
+          "options": {}
+        },
+        "id": "fetch-aol-spam-lester1_aol",
+        "name": "Fetch AOL Spam - LesterAJohn1@aol.com",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -768,
+          640
+        ],
+        "retryOnFail": true,
+        "waitBetweenTries": 5000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "function firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction sourceItemsForCurrentRun() {\n  const runIndex = typeof $runIndex === 'number' ? $runIndex : 0;\n  if (typeof $items === 'function') {\n    try {\n      const byRun = $items('Build AOL Spam Folder Memory Records', 0, runIndex);\n      if (Array.isArray(byRun) && byRun.length) return byRun;\n    } catch (error) {}\n  }\n  return [];\n}\n\nconst groups = new Map();\nconst seen = new Set();\n\nfor (const item of sourceItemsForCurrentRun()) {\n  const source = item.json ?? {};\n  const metadata = source.metadata ?? {};\n  const accountId = firstString(source.account_id, source.routeMailbox, metadata.account_id);\n  const sourceFolder = firstString(source.sourceFolder, source.source_folder, metadata.sourceFolder, metadata.source_folder, 'Spam');\n  const uid = firstString(source.imapUid, source.uid, metadata.imapUid, metadata.uid);\n  const messageId = firstString(source.rfcMessageId, source.sourceMessageId, source.messageId, metadata.messageId, uid);\n\n  if (!accountId || !uid) continue;\n\n  const itemKey = [accountId, sourceFolder, uid, messageId].join('|');\n  if (seen.has(itemKey)) continue;\n  seen.add(itemKey);\n\n  const groupKey = [accountId, sourceFolder].join('|');\n  if (!groups.has(groupKey)) {\n    groups.set(groupKey, { account_id: accountId, source_folder: sourceFolder, messages: [], expunge: true });\n  }\n  groups.get(groupKey).messages.push({ uid: String(uid), message_id: String(messageId || '') });\n}\n\nreturn Array.from(groups.values()).map((group) => ({ json: group }));"
+        },
+        "id": "prepare-aol-spam-delete-requests",
+        "name": "Prepare AOL Spam Delete Requests",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          336,
+          432
+        ]
+      }
+    ],
+    "connections": {
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "AOL Bridge Connection Info",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Every Hour": {
+        "main": [
+          [
+            {
+              "node": "Fetch AOL Spam - LesterAJohn@aol.com",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch AOL Spam - laj0703@aol.com",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch AOL Spam - LesterAJohn1@aol.com",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Embeddings": {
+        "ai_embedding": [
+          [
+            {
+              "node": "Qdrant Memory Tool",
+              "type": "ai_embedding",
+              "index": 0
+            },
+            {
+              "node": "Qdrant Memory Insert",
+              "type": "ai_embedding",
+              "index": 0
+            },
+            {
+              "node": "Qdrant AOL Spam Folder Insert",
+              "type": "ai_embedding",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Qdrant Memory Tool": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent Spam Classifier": {
+        "main": [
+          [
+            {
+              "node": "Merge Source With AI Output",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge Source With AI Output": {
+        "main": [
+          [
+            {
+              "node": "Validate AI Output",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Agent Output Audit",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Build Memory Records",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate AI Output": {
+        "main": [
+          [
+            {
+              "node": "Keep Spam Only",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Keep Spam Only": {
+        "main": [
+          [
+            {
+              "node": "Move AOL Spam to Spam Folder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Memory Records": {
+        "main": [
+          [
+            {
+              "node": "Qdrant Memory Insert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Memory Data Loader": {
+        "ai_document": [
+          [
+            {
+              "node": "Qdrant Memory Insert",
+              "type": "ai_document",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AOL Spam Folder Data Loader": {
+        "ai_document": [
+          [
+            {
+              "node": "Qdrant AOL Spam Folder Insert",
+              "type": "ai_document",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split AOL Spam Folder Messages": {
+        "main": [
+          [
+            {
+              "node": "Build AOL Spam Folder Memory Records",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build AOL Spam Folder Memory Records": {
+        "main": [
+          [
+            {
+              "node": "Qdrant AOL Spam Folder Insert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Qdrant AOL Spam Folder Insert": {
+        "main": [
+          [
+            {
+              "node": "Prepare AOL Spam Delete Requests",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AOL Inbox Trigger - LesterAJohn@aol.com": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route Lester",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stamp Route Lester": {
+        "main": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Merge Source With AI Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch AOL Spam - LesterAJohn@aol.com": {
+        "main": [
+          [
+            {
+              "node": "Split AOL Spam Folder Messages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AOL Inbox Trigger - laj0703@aol.com": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route LAJ0703",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stamp Route LAJ0703": {
+        "main": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Merge Source With AI Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch AOL Spam - laj0703@aol.com": {
+        "main": [
+          [
+            {
+              "node": "Split AOL Spam Folder Messages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AOL Inbox Trigger - LesterAJohn1@aol.com": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route Lester1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stamp Route Lester1": {
+        "main": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Merge Source With AI Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch AOL Spam - LesterAJohn1@aol.com": {
+        "main": [
+          [
+            {
+              "node": "Split AOL Spam Folder Messages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare AOL Spam Delete Requests": {
+        "main": [
+          [
+            {
+              "node": "Delete Learned AOL Spam",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Lester John",
+    "name": "Version 67066d3f",
+    "description": "",
+    "autosaved": true,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-30T21:03:43.989Z",
+        "id": 203,
+        "workflowId": "8CqjMUL6HY7bAOLs",
+        "versionId": "67066d3f-5931-4e19-b1d5-e2805c9e1f9c",
+        "event": "activated",
+        "userId": "dbd6493a-618f-4729-a8db-c6078f13cdde"
+      }
+    ]
+  }
+}

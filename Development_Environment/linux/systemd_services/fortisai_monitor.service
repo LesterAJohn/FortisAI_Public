@@ -1,0 +1,28 @@
+[Unit]
+Description=FortisAI monitoring, model update, and llama validation service
+After=network-online.target fortisai.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@DEPLOY_USER@
+WorkingDirectory=@REPO_ROOT@/Development_Environment/linux/systemd_services
+Environment=XDG_RUNTIME_DIR=/run/user/@DEPLOY_UID@
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/@DEPLOY_UID@/bus
+Environment=VIRTUAL_ENV=@MODEL_VENV_DIR@
+Environment=PATH=@MODEL_VENV_DIR@/bin:@DEPLOY_HOME@/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=LLAMA_DISABLE_FAILED=true
+Environment=LLAMA_RESET_AFTER_TESTS=true
+Environment=FORTISAI_ACTIVE_HOST=@ACTIVE_HOST@
+Environment=FORTISAI_WATCHDOG_DIR=@WATCHDOG_DIR@
+Environment=FORTISAI_ACTIVE_HOSTS_FILE=@RUNTIME_ACTIVE_HOSTS_FILE@
+Environment=FORTISAI_WATCHDOWN_FILE=@WATCHDOWN_FILE@
+ExecStart=@REPO_ROOT@/Development_Environment/linux/systemd_services/fortisai-monitor-service.sh
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

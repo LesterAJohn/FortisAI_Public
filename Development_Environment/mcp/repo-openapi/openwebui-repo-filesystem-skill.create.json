@@ -1,0 +1,16 @@
+{
+  "id": "fortisai-repo-filesystem-skill",
+  "name": "FortisAI Repo Filesystem Skill",
+  "description": "Operational playbook for local repository filesystem operations through the FortisAI repo filesystem OpenAPI server.",
+  "content": "Use this skill only for local repository filesystem operations through the FortisAI repo filesystem OpenAPI server.\n\nRequired OpenWebUI tool server:\n- repo-filesystem-server\n\nScope:\n- Inspect allowed directories and directory trees.\n- List files and collect metadata.\n- Search file names and file content.\n- Create directories, move paths, write files, edit files, or delete paths only when the user explicitly asks for that change.\n\nExecution guide:\n1. Start with /list_allowed_directories before reading or changing paths.\n2. Prefer /directory_tree or /list_directory before targeted file operations.\n3. Use /search_files for names and /search_content for text inside files.\n4. For write, edit, move, or delete operations, restate the target path and expected effect.\n5. Return concise file-path-focused summaries and avoid dumping large file contents.\n\nEndpoint guide:\n- GET /list_allowed_directories\n- POST /directory_tree\n- POST /list_directory\n- POST /get_metadata\n- POST /search_files\n- POST /search_content\n- POST /create_directory\n- POST /write_file\n- POST /edit_file\n- POST /move_path\n- POST /delete_path\n\nSafety guide:\n- Do not expose secrets, tokens, or credentials found in files.\n- Do not modify unrelated files.\n- Ask for confirmation before destructive operations.",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "repo",
+      "filesystem",
+      "openapi",
+      "openwebui"
+    ]
+  },
+  "is_active": true
+}

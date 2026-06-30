@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-dify.fortisai.local:8093",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-dify-server",
+      "description": "FortisAI Dify MCP OpenAPI bridge (runtime + /console/api support)"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

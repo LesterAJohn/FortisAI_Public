@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-sqlcl.fortisai.local:8091",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-sqlcl-server",
+      "description": "FortisAI SQLcl MCP OpenAPI bridge"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

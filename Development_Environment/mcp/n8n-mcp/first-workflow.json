@@ -1,0 +1,57 @@
+[
+  {
+    "id": "FstWfFortisAI0001",
+    "name": "FortisAI First Workflow",
+    "active": false,
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "manual-trigger",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [260, 300]
+      },
+      {
+        "parameters": {
+          "mode": "manual",
+          "assignments": {
+            "assignments": [
+              {
+                "id": "greeting-field",
+                "name": "message",
+                "type": "string",
+                "value": "Hello from FortisAI first workflow"
+              }
+            ]
+          },
+          "includeOtherFields": false,
+          "options": {}
+        },
+        "id": "set-greeting",
+        "name": "Set Greeting",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [520, 300]
+      }
+    ],
+    "connections": {
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "Set Greeting",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {},
+    "pinData": {},
+    "staticData": null,
+    "meta": null,
+    "tags": []
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "id": "fortisai-openmetadata-catalog",
+  "name": "FortisAI OpenMetadata Catalog Skill",
+  "description": "OpenMetadata-focused playbook skill for catalog search, lineage, and governance metadata.",
+  "content": "Use this skill for FortisAI data catalog, metadata search, lineage, glossary, tags, owners, dashboards, charts, database assets, and governance metadata.\n\nRequired OpenWebUI tool server:\n- `mcp-openmetadata-server`\n\nScope:\n- Search OpenMetadata catalog assets.\n- Inspect tables, databases, schemas, dashboards, charts, glossaries, tags, and lineage.\n- Summarize owners, descriptions, tags, and governance metadata.\n\nExecution guide:\n1. Use `/openmetadata_connection_info` for diagnostics.\n2. Use `/openmetadata_search` for broad discovery.\n3. Use `/openmetadata_get_entity_by_name` for focused lookups by FQN.\n4. Use `/openmetadata_get_lineage` for upstream/downstream dependency questions.\n5. Do not expose API tokens, Vault tokens, source credentials, or connection strings.",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "openmetadata",
+      "catalog"
+    ]
+  }
+}

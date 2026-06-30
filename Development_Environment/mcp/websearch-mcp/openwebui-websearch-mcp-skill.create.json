@@ -1,0 +1,16 @@
+{
+  "id": "fortisai-websearch-mcp",
+  "name": "FortisAI Websearch Skill",
+  "description": "Firecrawl-backed web search skill for current web information in OpenWebUI.",
+  "content": "# FortisAI Websearch Skill\n\nUse this skill when OpenWebUI needs current public web information through the FortisAI Firecrawl pod.\n\nRequired OpenWebUI tool server:\n- `mcp-websearch-server`\n\nCallable tool names:\n- `websearch_search` for normal public web searches.\n- `websearch` as a compatibility alias for `websearch_search` when the model emits the shorter tool name.\n- `websearch_scrape` for inspecting a specific URL after search.\n- `websearch_connection_info` only for diagnostics.\n\nScope:\n- Search the public web for current or externally sourced information.\n- Inspect a specific URL returned by search when more page detail is needed.\n- Return concise answers grounded in the URLs and titles returned by Firecrawl.\n\nExecution guide:\n1. For normal web queries, call `websearch_search` with OpenWebUI tool-call JSON that uses `parameters`, not `arguments`: `{\"tool_calls\":[{\"name\":\"websearch_search\",\"parameters\":{\"query\":\"Bishop Arts District Dallas restaurants list\",\"limit\":5}}]}`.\n2. Never call `websearch_search` or `websearch` with empty `parameters`; `query` is required and must be copied from the user's requested search topic. Do not emit raw `<tool_call>` text in user-visible answers.\n3. If the model emits `websearch`, OpenWebUI can execute that compatibility alias with the same `parameters` object as `websearch_search`.\n4. Use `websearch_connection_info` only for diagnostics or to confirm Firecrawl health.\n5. Use `websearch_scrape` only for URLs that need page-level detail after search.\n6. Prefer result titles, URLs, descriptions, and markdown snippets from Firecrawl over unsupported claims.\n7. Cite the URLs you relied on in the answer.\n8. If Firecrawl reports `/health` as missing, check `/v0/health/liveness` and `/v0/health/readiness`; the current image exposes those public health paths.\n9. If a bridge call fails, report the endpoint, status, and short error message. Do not expose API keys, Vault tokens, or container environment values.\n\nEndpoint guide:\n- `GET /websearch_connection_info`\n- `POST /websearch_search`\n- `POST /websearch`\n- `POST /websearch_scrape`\n\nRecommended request shapes:\n```json\n{\"query\":\"FortisAI local AI platform\",\"limit\":5,\"scrapeOptions\":{\"formats\":[\"markdown\"],\"onlyMainContent\":true}}\n```\n```json\n{\"query\":\"Bishop Arts District Dallas restaurants list\",\"limit\":15}\n```\n```json\n{\"url\":\"https://example.com\",\"formats\":[\"markdown\"],\"onlyMainContent\":true}\n```\n\nOpenWebUI tool-call example:\n```json\n{\"tool_calls\":[{\"name\":\"websearch_search\",\"parameters\":{\"query\":\"Stock and Barrel Bishop Arts Dallas location\",\"limit\":5}}]}\n```\n",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "websearch",
+      "firecrawl",
+      "mcp",
+      "openwebui"
+    ]
+  },
+  "is_active": true
+}

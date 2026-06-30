@@ -1,0 +1,14 @@
+{
+  "id": "fortisai-daytona-mcp",
+  "name": "FortisAI Daytona MCP",
+  "description": "Daytona sandbox lifecycle and sandbox command execution skill for OpenWebUI.",
+  "content": "# FortisAI Daytona Skill\n\nUse this skill when OpenWebUI needs to manage Daytona sandboxes or run a command inside an already-created Daytona sandbox.\n\nRequired OpenWebUI tool server:\n- `mcp-daytona-server`\n\nScope:\n- Check Daytona API/proxy health.\n- List, inspect, create, and delete Daytona sandboxes through the FortisAI Daytona API.\n- Execute shell commands inside a Daytona sandbox through the toolbox proxy.\n\nExecution guide:\n1. Use `/daytona_connection_info` for diagnostics and to confirm the bridge has a Daytona API key.\n2. Use `/daytona_list_sandboxes` before command execution when the sandbox id or name is unknown.\n3. Use `/daytona_get_sandbox` to confirm state before running commands. If no snapshot is supplied when creating a sandbox, the bridge uses the helper-managed `fortisai-ubuntu-22.04` snapshot.\n4. Use `/daytona_execute_command` only for commands intended to run inside the selected Daytona sandbox. If the named sandbox is missing, the bridge creates it with the helper-managed snapshot and waits for it to start before executing. Do not present it as host-shell execution.\n5. Keep command timeouts explicit for long-running work; the bridge allows up to 1800 seconds.\n6. Return the sandbox id, exit code, and concise output summary. Include the full output only when the user asks for it or it is short.\n7. Do not expose API keys, Vault tokens, container environment values, or bearer headers.\n\nEndpoint guide:\n- `GET /daytona_connection_info`\n- `POST /daytona_list_sandboxes`\n- `POST /daytona_get_sandbox`\n- `POST /daytona_create_sandbox`\n- `POST /daytona_delete_sandbox`\n- `POST /daytona_get_toolbox_proxy`\n- `POST /daytona_execute_command`\n\nRecommended request shapes:\n```json\n{\"limit\":10,\"states\":[\"STARTED\"]}\n```\n```json\n{\"sandbox_id_or_name\":\"fortisai-smoke\",\"command\":\"pwd && python3 --version\",\"cwd\":\"/home/daytona/project\",\"timeout_seconds\":30}\n```\n```json\n{\"name\":\"fortisai-openwebui-smoke\",\"target\":\"us\",\"autoDeleteInterval\":0,\"labels\":{\"source\":\"openwebui\"}}\n```\n",
+  "meta": {
+    "tags": [
+      "daytona",
+      "sandbox",
+      "code-execution",
+      "fortisai"
+    ]
+  }
+}

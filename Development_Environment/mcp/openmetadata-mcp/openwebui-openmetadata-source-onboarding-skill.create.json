@@ -1,0 +1,13 @@
+{
+  "id": "fortisai-openmetadata-source-onboarding",
+  "name": "FortisAI OpenMetadata Source Onboarding Skill",
+  "description": "OpenMetadata-focused playbook skill for source registration, ingestion pipeline setup, and ingestion execution.",
+  "content": "Use this skill to register data sources in OpenMetadata, configure catalog ingestion, test source connectivity, trigger catalog ingestion, and inspect ingestion status.\n\nRequired OpenWebUI tool server:\n- `mcp-openmetadata-server`\n\nScope:\n- Add or update OpenMetadata database, dashboard, storage, messaging, and pipeline services.\n- Create or update ingestion pipelines.\n- Deploy and trigger ingestion pipelines.\n- Inspect ingestion status and logs.\n\nInitial FortisAI source aliases:\n- `tradeenginedb0_mongodb`\n- `tradeenginedb_influxdb`\n\nExecution guide:\n1. Use `/openmetadata_supported_service_types` before adding a new source type.\n2. Use `/openmetadata_create_or_update_source` for known FortisAI aliases.\n3. Use `/openmetadata_create_or_update_service` only when the user provides a source shape that is not covered by an alias.\n4. Use `/openmetadata_create_or_update_ingestion_pipeline`, then `/openmetadata_deploy_ingestion_pipeline`, then `/openmetadata_trigger_ingestion_pipeline` when ingestion execution is requested.\n5. Use `/openmetadata_get_ingestion_status` and `/openmetadata_get_ingestion_logs` for run follow-up.\n6. Do not expose source credentials. Prefer Vault-backed secret references. Do not delete OpenMetadata services, users, teams, tokens, or catalog assets unless explicitly authorized.",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "openmetadata",
+      "ingestion"
+    ]
+  }
+}

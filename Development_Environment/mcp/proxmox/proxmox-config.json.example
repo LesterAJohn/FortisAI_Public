@@ -1,0 +1,20 @@
+{
+  "default_environment": "default",
+  "proxmox": {
+    "host": "proxmox.example.local",
+    "port": 8006,
+    "verify_ssl": true,
+    "service": "PVE"
+  },
+  "auth": {
+    "user": "root@pam",
+    "token_name": "fortisai-mcp",
+    "token_value": "replace-with-token-secret"
+  },
+  "logging": {
+    "level": "INFO"
+  },
+  "security": {
+    "dev_mode": false
+  }
+}

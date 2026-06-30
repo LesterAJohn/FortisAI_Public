@@ -1,0 +1,176 @@
+app:
+  description: "Routes Dify requests across local OpenAI-compatible models using scheduled LLMDB-assisted classification."
+  icon: "🤖"
+  icon_background: "#FFEAD5"
+  icon_type: emoji
+  mode: advanced-chat
+  name: local-openai-compatible-router
+  use_icon_as_answer_icon: false
+dependencies:
+  - current_identifier: null
+    type: marketplace
+    value:
+      marketplace_plugin_unique_identifier: langgenius/openai_api_compatible:0.0.53@a0dfb462961a03c6a6415d4185043185b01017c64da93cf82a9e5ecaf59f8ed0
+      version: null
+kind: app
+version: 0.6.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods: []
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods: []
+      number_limits: 3
+    opening_statement: ""
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ""
+      voice: ""
+  graph:
+    edges:
+      - data:
+          isInLoop: false
+          sourceType: start
+          targetType: llm
+        id: start-to-llm
+        source: start
+        sourceHandle: source
+        target: llm
+        targetHandle: target
+        type: custom
+        zIndex: 0
+      - data:
+          isInLoop: false
+          sourceType: llm
+          targetType: answer
+        id: llm-to-answer
+        source: llm
+        sourceHandle: source
+        target: answer
+        targetHandle: target
+        type: custom
+        zIndex: 0
+    nodes:
+      - data:
+          desc: ""
+          selected: false
+          title: "User Input"
+          type: start
+          variables: []
+        height: 74
+        id: start
+        position:
+          x: 80
+          y: 280
+        positionAbsolute:
+          x: 80
+          y: 280
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 243
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: ""
+          model:
+            completion_params:
+              temperature: 0.1
+            mode: chat
+            name: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q5_k_m
+            provider: langgenius/openai_api_compatible/openai_api_compatible
+          prompt_template:
+            - id: fortisai-router-system-prompt
+              role: system
+              text: "You are the FortisAI local LLM router.\nClassify the user's request and select the best local OpenAI-compatible model from the routing table.\nReturn a concise routing decision with request_type, selected_model, fallback_models, and rationale.\nIf a request includes tools, function calls, API actions, workflow orchestration, or explicit tool_choice, use agentic_tool_use.\nAll routes must use the selected preferred model; do not substitute a warm model for cold-load avoidance.\nThe agentic_tool_use route also requires tool_use capability and force-loads the selected model.\nIf the request does not clearly match a specialized route, use analysis_research.\n\nLocal OpenAI-compatible endpoint: http://fortisai-llama-server.fortisai.local:8011/v1\n\nRouting table:\n- request_type: coding; description: Software engineering, code generation, debugging, refactoring, and repository analysis.; primary_model: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0; fallback_models: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0-00001-of-00002, qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_k_m, qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_k_m-00001-of-00002; match_hints: code, debug, refactor, repository, function, script, software, api; required_capabilities: none; force_model_load: false\n- request_type: agentic_tool_use; description: Multi-step tool use, workflow orchestration, API planning, and autonomous task execution.; primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0; fallback_models: google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0, qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0, qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0-00001-of-00002; match_hints: tool, tool use, tool call, function call, tool_choice, workflow, api call, mcp tool, orchestrate, multi-step, agent, plan; required_capabilities: tool_use; force_model_load: true\n- request_type: reasoning_math; description: Logical reasoning, math, proofs, planning, and careful multi-step analysis.; primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0; fallback_models: none; match_hints: reason, prove, math, calculate, logic, derive, constraint; required_capabilities: none; force_model_load: false\n- request_type: analysis_research; description: Synthesis, research, comparison, policy/architecture analysis, and long-form answers.; primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0; fallback_models: none; match_hints: analyze, compare, research, architecture, strategy, explain; required_capabilities: none; force_model_load: false\n- request_type: summarization; description: Summaries, extraction, rewrite, document condensation, and structured notes.; primary_model: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0; fallback_models: microsoft__microsoft_Phi-3-mini-4k-instruct-gguf__Phi-3-mini-4k-instruct-q4, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m; match_hints: summarize, rewrite, brief, extract key points, condense; required_capabilities: none; force_model_load: false\n- request_type: classification_extraction; description: Fast labels, routing decisions, entity extraction, JSON normalization, and triage.; primary_model: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0; fallback_models: microsoft__microsoft_Phi-3-mini-4k-instruct-gguf__Phi-3-mini-4k-instruct-q4, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m; match_hints: classify, label, extract, json, schema, triage; required_capabilities: none; force_model_load: false\n- request_type: embeddings; description: Stable text embedding generation for Qdrant, RAG, memory, and vector-store insertion.; primary_model: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0; fallback_models: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q5_0; match_hints: embedding, embeddings, vector, semantic search, qdrant, rag, memory; required_capabilities: embeddings; force_model_load: false\n- request_type: long_context; description: Large document or codebase context where context length matters more than raw speed.; primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0; fallback_models: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q8_0, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0, google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0; match_hints: long document, large context, many files, full report, codebase; required_capabilities: none; force_model_load: false\n- request_type: fast_chat; description: Low-latency general chat, simple Q&A, drafts, and inexpensive repeated tasks.; primary_model: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0; fallback_models: microsoft__microsoft_Phi-3-mini-4k-instruct-gguf__Phi-3-mini-4k-instruct-q4, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m; match_hints: quick, draft, chat, simple, short answer; required_capabilities: none; force_model_load: false\n- request_type: multimodal_vision; description: Vision-capable or image-adjacent tasks where a local multimodal model is available.; primary_model: google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0; fallback_models: none; match_hints: image, vision, screenshot, chart, diagram; required_capabilities: none; force_model_load: false\n- request_type: safety_guardrail; description: Safety, policy, moderation, jailbreak checks, and guardrail review.; primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0; fallback_models: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q8_0, qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0, google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0; match_hints: safety, policy, moderation, jailbreak, risk; required_capabilities: none; force_model_load: false"
+          selected: false
+          title: "Route Request"
+          type: llm
+          vision:
+            enabled: false
+        height: 89
+        id: llm
+        position:
+          x: 400
+          y: 280
+        positionAbsolute:
+          x: 400
+          y: 280
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 243
+      - data:
+          answer: "{{#llm.text#}}"
+          desc: ""
+          selected: false
+          title: Answer
+          type: answer
+          variables: []
+        height: 105
+        id: answer
+        position:
+          x: 720
+          y: 280
+        positionAbsolute:
+          x: 720
+          y: 280
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 243
+    viewport:
+      x: 0
+      y: 0
+      zoom: 1
+  rag_pipeline_variables: []
+fortisai:
+  generated_at: 2026-06-30T08:42:31.054Z
+  generated_by: "n8n local-llm-router-classification"
+  openai_base_url: http://fortisai-llama-server.fortisai.local:8011/v1
+  classifier_model: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q5_k_m
+  route_models:
+    - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0
+    - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0-00001-of-00002
+    - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_k_m
+    - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_k_m-00001-of-00002
+    - claude__Negentropy-claude-opus-4.7-9B-Q8_0
+    - google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0
+    - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0
+    - microsoft__microsoft_Phi-3-mini-4k-instruct-gguf__Phi-3-mini-4k-instruct-q4
+    - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0
+    - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m
+    - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q5_0
+    - qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q8_0
+  classification_source: classifier_agent
+  router_kind: fortisai.dify.openai-compatible-router.v1

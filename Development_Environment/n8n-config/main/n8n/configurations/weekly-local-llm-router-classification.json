@@ -1,0 +1,162 @@
+{
+  "name": "Monthly Local LLM Router Classification",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "monthsInterval": 1,
+              "triggerAtDayOfMonth": 1,
+              "triggerAtHour": 18,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "monthly-day-1-6pm-eastern",
+      "name": "Monthly Day 1 6 PM Eastern",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-n8n-workflow-runner.fortisai.local:5680/run/local-llm-router-classification",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "{\"workflow\":\"local-llm-router-classification\"}",
+        "options": {
+          "timeout": 1200000
+        }
+      },
+      "id": "run-local-llm-router-classification",
+      "name": "Run Local LLM Router Classification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        560,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-n8n-workflow-runner.fortisai.local:5680/run/dify-openai-compatible-model-setup",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "{\"workflow\":\"dify-openai-compatible-model-setup\"}",
+        "options": {
+          "timeout": 1800000
+        }
+      },
+      "id": "run-dify-openai-compatible-model-setup",
+      "name": "Run Dify OpenAI-Compatible Model Setup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        880,
+        290
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-n8n-workflow-runner.fortisai.local:5680/run/dify-local-openai-compatible-router-import",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "{\"workflow\":\"dify-local-openai-compatible-router-import\"}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "run-dify-local-openai-compatible-router-import",
+      "name": "Run Dify Router App Import",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1200,
+        290
+      ]
+    }
+  ],
+  "connections": {
+    "Monthly Day 1 6 PM Eastern": {
+      "main": [
+        [
+          {
+            "node": "Run Local LLM Router Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Local LLM Router Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Local LLM Router Classification": {
+      "main": [
+        [
+          {
+            "node": "Run Dify OpenAI-Compatible Model Setup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Dify OpenAI-Compatible Model Setup": {
+      "main": [
+        [
+          {
+            "node": "Run Dify Router App Import",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "staticData": null,
+  "pinData": {},
+  "active": true,
+  "versionId": "11111111-2222-4333-8444-555555555555",
+  "id": "weekly-local-llm-router-classification",
+  "tags": [
+    "fortisai",
+    "llm-routing",
+    "dify"
+  ]
+}

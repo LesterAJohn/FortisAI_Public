@@ -1,0 +1,14 @@
+{
+  "id": "fortisai-composio-saas-connector",
+  "name": "FortisAI Composio SaaS Connector Skill",
+  "description": "Composio-focused playbook skill for external SaaS connectors that do not conflict with FortisAI-native MCPs.",
+  "content": "# FortisAI Composio SaaS Connector Skill\n\nUse this skill for external SaaS applications and cloud services that are not already exposed through a dedicated FortisAI MCP/OpenAPI bridge.\n\nRequired OpenWebUI tool server:\n- `mcp-composio-server`\n\nSession requirement:\n- Every Composio tool call must use the current OpenWebUI user as the Composio session `user_id`. Include `openwebui_user_id` with the OpenWebUI username, email, or user id in `/composio_search_tools`, `/composio_execute_tool`, and `/composio_mcp_request` calls. The FortisAI bridge forwards that identity to the local Composio MCP proxy, which creates or reuses `Composio().create(user_id=<openwebui user>, mcp=True)` and calls the returned `session.mcp.url` with `session.mcp.headers`.\n\nAllowed by default:\n- Email, calendar, chat, document, storage, CRM, ticketing, project management, marketing, finance, analytics, HR, ecommerce, developer SaaS, and other third-party cloud applications available through Composio.\n- Examples include Gmail, Outlook, Microsoft Teams, Slack, Google Calendar, Google Drive, Google Docs, Google Sheets, Notion, Linear, Jira, GitHub, GitLab, HubSpot, Salesforce, Zendesk, Asana, Trello, Airtable, Dropbox, OneDrive, DocuSign, Shopify, Stripe, Mailchimp, and similar SaaS services.\n\nDo not use Composio when a FortisAI-native MCP/OpenAPI bridge exists for the task.\n\nFortisAI-native exclusions:\n- Firecrawl / websearch: use `mcp-websearch-server`.\n- Daytona / code execution: use `mcp-daytona-server`.\n- Oracle SQL / SQLcl: use `mcp-sqlcl-server`.\n- n8n workflows: use `mcp-n8n-server`.\n- Dify / FortisAI proxy: use `mcp-dify-server`.\n- CodeIndexer / semantic code search: use `mcp-codeindexer-server`.\n- Proxmox infrastructure operations: use `mcp-proxmox-server`.\n- OpenMetadata catalog and ingestion tasks: use `mcp-openmetadata-server`.\n- FortisAI repo filesystem, memory, and time operations: use the repo OpenAPI tools.\n\nExecution guide:\n1. Use `/composio_connection_info` to confirm the Composio MCP URL is configured; a Vault API key is optional when the local Composio SDK/container is already authenticated.\n2. Use `/composio_search_tools` with `openwebui_user_id` set to the current OpenWebUI username/user id to inspect available allowed tools for that user session.\n3. Use `/composio_execute_tool` with the same `openwebui_user_id` only for the requested external SaaS action.\n4. Never expose OAuth links, API keys, bearer headers, Vault tokens, or connected-account secrets.\n5. Prefer read-only SaaS actions unless the user explicitly asks for a write action.\n",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "composio",
+      "saas",
+      "mcp"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "fortisai-dify-mcp-orchestrator",
+  "name": "FortisAI Dify Skill",
+  "description": "Dify-focused playbook skill for runtime and console endpoint operations.",
+  "content": "Use this skill only for Dify-related tasks in OpenWebUI.\n\nRequired OpenWebUI tool server:\n- mcp-dify-server\n\nScope:\n- Dify app behavior and orchestration\n- Prompt and instruction tuning\n- Dataset usage and retrieval strategy\n- Dify workflow and tool-calling patterns\n- Dify console and admin endpoint operations\n\nExecution guide:\n1. Clarify the target Dify app/workflow and expected outcome before proposing changes.\n2. Prefer incremental updates to prompts and workflow logic instead of broad rewrites.\n3. For diagnostics, summarize issue, probable root cause, and smallest safe fix.\n4. Return concise Dify-centered outputs: app/workflow name, changed component, and validation result.\n5. For Dify bridge calls, choose endpoint family intentionally:\n   - Runtime app requests: /v1/* (app auth).\n   - Console/admin requests: /console/api/* (admin auth in auto mode).\n6. If an API/bridge call fails, report HTTP status, endpoint, and suggested next step.\n\nEndpoint guide (runtime + console):\n- GET /v1/parameters\n- GET /v1/meta\n- POST /v1/chat-messages\n- POST /v1/completion-messages\n- POST /v1/workflows/run\n- GET /console/api/apps\n- GET /console/api/workspaces\n- GET /console/api/admin/insert-explore-apps\n\nBridge auth-mode guide:\n- /dify_api_request supports authMode values: auto, app, admin, console, none\n- Recommended default: authMode=auto\n- In auto mode, /v1/* uses app auth and /console/api/* uses admin auth\n\nDo not use:\n- Legacy non-console /api/* paths for Dify console operations. Use /console/api/* for console routes.\n\nSafety guide:\n- Do not expose secrets, tokens, or credentials.\n- Do not modify unrelated systems when handling Dify requests.\n- Ask for confirmation before destructive or high-impact Dify changes.",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "dify",
+      "mcp",
+      "openwebui"
+    ]
+  },
+  "is_active": true
+}

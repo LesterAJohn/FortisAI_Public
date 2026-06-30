@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-openmetadata.fortisai.local:8100",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-openmetadata-server",
+      "description": "FortisAI OpenMetadata MCP OpenAPI bridge for catalog search, lineage, source onboarding, and ingestion control"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

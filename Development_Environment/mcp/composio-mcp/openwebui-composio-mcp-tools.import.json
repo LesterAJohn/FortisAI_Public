@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-composio.fortisai.local:8099",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-composio-server",
+      "description": "FortisAI Composio MCP OpenAPI bridge for external SaaS connector access"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

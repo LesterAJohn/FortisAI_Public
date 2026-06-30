@@ -1,0 +1,710 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FORTISAI_DEV_HOME="${FORTISAI_DEV_HOME:-$HOME/fortisai-dev}"
+SHARED_NETWORK="${FORTISAI_SHARED_NETWORK:-fortisai-dev-net}"
+
+SQLCL_BRIDGE_CONTAINER="${SQLCL_BRIDGE_CONTAINER:-fortisai-mcp-openapi-sqlcl}"
+SQLCL_BRIDGE_PORT="${SQLCL_BRIDGE_PORT:-8091}"
+
+N8N_BRIDGE_CONTAINER="${N8N_BRIDGE_CONTAINER:-fortisai-mcp-openapi-n8n}"
+N8N_BRIDGE_PORT="${N8N_BRIDGE_PORT:-8092}"
+
+DIFY_BRIDGE_CONTAINER="${DIFY_BRIDGE_CONTAINER:-fortisai-mcp-openapi-dify}"
+DIFY_BRIDGE_PORT="${DIFY_BRIDGE_PORT:-8093}"
+
+DEBUG_BRIDGE_CONTAINER="${DEBUG_BRIDGE_CONTAINER:-fortisai-mcp-openapi-debug}"
+DEBUG_BRIDGE_PORT="${DEBUG_BRIDGE_PORT:-8094}"
+
+CODEINDEXER_BRIDGE_CONTAINER="${CODEINDEXER_BRIDGE_CONTAINER:-fortisai-mcp-openapi-codeindexer}"
+CODEINDEXER_BRIDGE_PORT="${CODEINDEXER_BRIDGE_PORT:-8096}"
+CODEINDEXER_REPO_DIR="${CODEINDEXER_REPO_DIR:-$FORTISAI_DEV_HOME/codeindexer/repo}"
+CODEINDEXER_STATE_DIR="${CODEINDEXER_STATE_DIR:-$FORTISAI_DEV_HOME/codeindexer/state}"
+CODEINDEXER_GITHUB_DIR="${CODEINDEXER_GITHUB_DIR:-$FORTISAI_DEV_HOME/codeindexer/github}"
+CODEINDEXER_WORKSPACE="${CODEINDEXER_WORKSPACE:-/workspace}"
+CODEINDEXER_HOST_WORKSPACE="${CODEINDEXER_HOST_WORKSPACE:-$REPO_ROOT}"
+CODEINDEXER_MILVUS_ADDRESS="${CODEINDEXER_MILVUS_ADDRESS:-fortisai-milvus.fortisai.local:19530}"
+CODEINDEXER_MILVUS_TOKEN="${CODEINDEXER_MILVUS_TOKEN:-}"
+CODEINDEXER_OPENAI_BASE_URL="${CODEINDEXER_OPENAI_BASE_URL:-http://fortisai-mcp-openapi-dify.fortisai.local:8093/v1}"
+CODEINDEXER_OPENAI_API_KEY="${CODEINDEXER_OPENAI_API_KEY:-${FORTISAI_LLAMA_OPENAI_API_KEY:-local-llama}}"
+CODEINDEXER_OPENAI_EMBEDDING_MODEL="${CODEINDEXER_OPENAI_EMBEDDING_MODEL:-fortisai}"
+CODEINDEXER_OPENAI_EMBEDDING_DIMENSION="${CODEINDEXER_OPENAI_EMBEDDING_DIMENSION:-}"
+CODEINDEXER_MCP_TIMEOUT_MS="${CODEINDEXER_MCP_TIMEOUT_MS:-900000}"
+CODEINDEXER_GITHUB_TOKEN="${CODEINDEXER_GITHUB_TOKEN:-}"
+CODEINDEXER_GITHUB_ALLOWED_ORGS="${CODEINDEXER_GITHUB_ALLOWED_ORGS:-}"
+CODEINDEXER_GITHUB_ALLOWED_REPOS="${CODEINDEXER_GITHUB_ALLOWED_REPOS:-}"
+
+WEBSEARCH_BRIDGE_CONTAINER="${WEBSEARCH_BRIDGE_CONTAINER:-fortisai-mcp-openapi-websearch}"
+WEBSEARCH_BRIDGE_PORT="${WEBSEARCH_BRIDGE_PORT:-8097}"
+
+DAYTONA_BRIDGE_CONTAINER="${DAYTONA_BRIDGE_CONTAINER:-fortisai-mcp-openapi-daytona}"
+DAYTONA_BRIDGE_PORT="${DAYTONA_BRIDGE_PORT:-8098}"
+DAYTONA_API_URL="${DAYTONA_API_URL:-http://daytona-api.fortisai.local:3000/api}"
+DAYTONA_DASHBOARD_URL="${DAYTONA_DASHBOARD_URL:-http://daytona-api.fortisai.local:3000}"
+DAYTONA_PROXY_URL="${DAYTONA_PROXY_URL:-http://daytona-proxy.fortisai.local:4000/toolbox}"
+DAYTONA_API_KEY="${DAYTONA_API_KEY:-}"
+DAYTONA_ORG_ID="${DAYTONA_ORG_ID:-}"
+DAYTONA_DEFAULT_SNAPSHOT="${DAYTONA_DEFAULT_SNAPSHOT:-fortisai-ubuntu-22.04}"
+
+COMPOSIO_LOCAL_CONTAINER="${COMPOSIO_LOCAL_CONTAINER:-fortisai-composio-local}"
+COMPOSIO_LOCAL_PORT="${COMPOSIO_LOCAL_PORT:-8090}"
+COMPOSIO_LOCAL_HOST_PORT="${COMPOSIO_LOCAL_HOST_PORT:-18190}"
+COMPOSIO_BRIDGE_CONTAINER="${COMPOSIO_BRIDGE_CONTAINER:-fortisai-mcp-openapi-composio}"
+COMPOSIO_BRIDGE_PORT="${COMPOSIO_BRIDGE_PORT:-8099}"
+COMPOSIO_MCP_URL="${COMPOSIO_MCP_URL:-http://${COMPOSIO_LOCAL_CONTAINER}.fortisai.local:8090/mcp}"
+COMPOSIO_UPSTREAM_MCP_URL="${COMPOSIO_UPSTREAM_MCP_URL:-}"
+COMPOSIO_MCP_HEADERS_JSON="${COMPOSIO_MCP_HEADERS_JSON:-}"
+COMPOSIO_API_KEY="${COMPOSIO_API_KEY:-}"
+COMPOSIO_ALLOWED_TOOLKITS="${COMPOSIO_ALLOWED_TOOLKITS:-}"
+COMPOSIO_USER_ID="${COMPOSIO_USER_ID:-fortisai-openwebui}"
+COMPOSIO_TOOLKITS="${COMPOSIO_TOOLKITS:-}"
+COMPOSIO_SESSION_ID="${COMPOSIO_SESSION_ID:-}"
+
+OPENMETADATA_BRIDGE_CONTAINER="${OPENMETADATA_BRIDGE_CONTAINER:-fortisai-mcp-openapi-openmetadata}"
+OPENMETADATA_BRIDGE_PORT="${OPENMETADATA_BRIDGE_PORT:-8100}"
+OPENMETADATA_BASE_URL="${OPENMETADATA_BASE_URL:-http://fortisai-openmetadata.fortisai.local:8585/api}"
+OPENMETADATA_API_TOKEN="${OPENMETADATA_API_TOKEN:-}"
+OPENMETADATA_ALLOW_WRITE="${OPENMETADATA_ALLOW_WRITE:-true}"
+OPENMETADATA_ALLOW_SAMPLE_DATA="${OPENMETADATA_ALLOW_SAMPLE_DATA:-false}"
+
+AOL_IMAP_BRIDGE_CONTAINER="${AOL_IMAP_BRIDGE_CONTAINER:-fortisai-mcp-openapi-aol-imap}"
+AOL_IMAP_BRIDGE_PORT="${AOL_IMAP_BRIDGE_PORT:-8101}"
+AOL_IMAP_HOST="${AOL_IMAP_HOST:-imap.aol.com}"
+AOL_IMAP_PORT="${AOL_IMAP_PORT:-993}"
+AOL_IMAP_TIMEOUT_SECONDS="${AOL_IMAP_TIMEOUT_SECONDS:-30}"
+AOL_IMAP_SPAM_FOLDER="${AOL_IMAP_SPAM_FOLDER:-Spam}"
+
+PROXMOX_BRIDGE_CONTAINER="${PROXMOX_BRIDGE_CONTAINER:-fortisai-mcp-openapi-proxmox}"
+PROXMOX_UPSTREAM_CONTAINER="${PROXMOX_UPSTREAM_CONTAINER:-${PROXMOX_BRIDGE_CONTAINER}-upstream}"
+PROXMOX_BRIDGE_PORT="${PROXMOX_BRIDGE_PORT:-8095}"
+PROXMOX_MCP_DIR="${PROXMOX_MCP_DIR:-$SCRIPT_DIR/proxmox}"
+PROXMOX_MCP_CONFIG_FILE="${PROXMOX_MCP_CONFIG_FILE:-$PROXMOX_MCP_DIR/proxmox-config.json}"
+PROXMOX_BRIDGE_ENABLED="${PROXMOX_BRIDGE_ENABLED:-auto}"
+PROXMOX_UPSTREAM_URL="${PROXMOX_UPSTREAM_URL:-http://$PROXMOX_UPSTREAM_CONTAINER.fortisai.local:8811}"
+PROXMOX_UPSTREAM_IMAGE="${PROXMOX_UPSTREAM_IMAGE:-localhost/fortisai-proxmoxmcp-plus:latest}"
+PROXMOX_UPSTREAM_BUILD_REPO="${PROXMOX_UPSTREAM_BUILD_REPO:-https://github.com/LesterAJohn/ProxmoxMCP-Plus.git}"
+PROXMOX_UPSTREAM_BUILD_REF="${PROXMOX_UPSTREAM_BUILD_REF:-main}"
+PROXMOX_UPSTREAM_BUILD_DIR="${PROXMOX_UPSTREAM_BUILD_DIR:-$FORTISAI_DEV_HOME/proxmoxmcp-plus-src}"
+PROXMOX_UPSTREAM_FORCE_BUILD="${PROXMOX_UPSTREAM_FORCE_BUILD:-false}"
+PROXMOX_DEFAULT_ENVIRONMENT="${PROXMOX_DEFAULT_ENVIRONMENT:-}"
+
+FORTISAI_VAULT_ADDR="${FORTISAI_VAULT_ADDR:-${VAULT_ADDR:-http://fortisai-vault.fortisai.local:8200}}"
+VAULT_ADDR="${VAULT_ADDR:-$FORTISAI_VAULT_ADDR}"
+VAULT_TOKEN="${VAULT_TOKEN:-}"
+
+ORACLE_DB_HOST="${ORACLE_DB_HOST:-fortisai-oracle-db.fortisai.local}"
+ORACLE_DB_PORT="${ORACLE_DB_PORT:-1521}"
+ORACLE_DB_SERVICE_NAME="${ORACLE_DB_SERVICE_NAME:-FREEPDB1}"
+ORACLE_DB_USER="${ORACLE_DB_USER:-pdbadmin}"
+ORACLE_DB_PASSWORD="${ORACLE_DB_PASSWORD:-FortisAI26ai!2026}"
+
+DIFY_BASE_URL="${DIFY_BASE_URL:-http://docker_api_1.fortisai.local:5001}"
+DIFY_API_KEY="${DIFY_API_KEY:-${ADMIN_API_KEY:-${DIFY_ADMIN_API_KEY:-}}}"
+DIFY_ADMIN_API_KEY="${DIFY_ADMIN_API_KEY:-${ADMIN_API_KEY:-}}"
+DIFY_CONSOLE_ACCESS_TOKEN="${DIFY_CONSOLE_ACCESS_TOKEN:-}"
+DIFY_ADMIN_WORKSPACE_ID="${DIFY_ADMIN_WORKSPACE_ID:-}"
+DIFY_TIMEOUT_SECONDS="${DIFY_TIMEOUT_SECONDS:-300}"
+DIFY_DB_HOST="${DIFY_DB_HOST:-fortisai-pgvector.fortisai.local}"
+DIFY_DB_PORT="${DIFY_DB_PORT:-5432}"
+DIFY_DB_NAME="${DIFY_DB_NAME:-fortisai}"
+DIFY_DB_USER="${DIFY_DB_USER:-fortisai}"
+DIFY_DB_PASSWORD="${DIFY_DB_PASSWORD:-}"
+ADMIN_API_KEY="${ADMIN_API_KEY:-${DIFY_API_KEY:-${DIFY_ADMIN_API_KEY:-}}}"
+KNOWLEDGE_API_KEY="${KNOWLEDGE_API_KEY:-${DIFY_KNOWLEDGE_API_KEY:-}}"
+DIFY_KEYS_JSON_FILE="${DIFY_KEYS_JSON_FILE:-$SCRIPT_DIR/dify-mcp/dify-api-key.json}"
+FORTISAI_OPENAI_ROUTER_MODEL="${FORTISAI_OPENAI_ROUTER_MODEL:-fortisai}"
+FORTISAI_OPENAI_ROUTER_APP_NAME="${FORTISAI_OPENAI_ROUTER_APP_NAME:-local-openai-compatible-router}"
+FORTISAI_OPENAI_ROUTER_CLASSIFICATION_FILE="${FORTISAI_OPENAI_ROUTER_CLASSIFICATION_FILE:-/workspace/Development_Environment/dify-config/main/dify/generated/local-llm-classification.generated.json}"
+FORTISAI_OPENAI_ROUTER_TIMEOUT_SECONDS="${FORTISAI_OPENAI_ROUTER_TIMEOUT_SECONDS:-1800}"
+FORTISAI_OPENAI_ROUTER_FORCE_LOAD_TIMEOUT_SECONDS="${FORTISAI_OPENAI_ROUTER_FORCE_LOAD_TIMEOUT_SECONDS:-1800}"
+FORTISAI_OPENAI_ROUTER_STREAM_KEEPALIVE_SECONDS="${FORTISAI_OPENAI_ROUTER_STREAM_KEEPALIVE_SECONDS:-10}"
+FORTISAI_OPENAI_ROUTER_DEFAULT_MAX_TOKENS="${FORTISAI_OPENAI_ROUTER_DEFAULT_MAX_TOKENS:-1536}"
+FORTISAI_OPENAI_ROUTER_MAX_TOKENS_HARD_LIMIT="${FORTISAI_OPENAI_ROUTER_MAX_TOKENS_HARD_LIMIT:-3072}"
+FORTISAI_OPENAI_ROUTER_PREFER_LOADED_MODELS="false"
+FORTISAI_OPENAI_ROUTER_MODEL_STATUS_TIMEOUT_SECONDS="${FORTISAI_OPENAI_ROUTER_MODEL_STATUS_TIMEOUT_SECONDS:-5}"
+FORTISAI_OPENAI_ROUTER_MODEL_STATUS_CACHE_SECONDS="${FORTISAI_OPENAI_ROUTER_MODEL_STATUS_CACHE_SECONDS:-15}"
+FORTISAI_LLAMA_OPENAI_BASE_URL="${FORTISAI_LLAMA_OPENAI_BASE_URL:-http://fortisai-llama-server.fortisai.local:8011/v1}"
+FORTISAI_LLAMA_OPENAI_API_KEY="${FORTISAI_LLAMA_OPENAI_API_KEY:-local-llama}"
+FORTISAI_OPENAI_EMBEDDING_MODEL="${FORTISAI_OPENAI_EMBEDDING_MODEL:-}"
+FORTISAI_HONCHO_MODEL="${FORTISAI_HONCHO_MODEL:-mistral__mistralai_Mistral-Small-3.2-24B-Instruct-2506-Q8_0}"
+FORTISAI_HONCHO_BASE_URL="${FORTISAI_HONCHO_BASE_URL:-http://fortisai-honcho-api.fortisai.local:8000}"
+FORTISAI_HONCHO_API_KEY="${FORTISAI_HONCHO_API_KEY:-${HONCHO_API_KEY:-}}"
+FORTISAI_HONCHO_REQUIRED="${FORTISAI_HONCHO_REQUIRED:-true}"
+FORTISAI_HONCHO_WORKSPACE_ID="${FORTISAI_HONCHO_WORKSPACE_ID:-fortisai}"
+FORTISAI_HONCHO_ASSISTANT_PEER_ID="${FORTISAI_HONCHO_ASSISTANT_PEER_ID:-fortisai_proxy}"
+FORTISAI_HONCHO_DEFAULT_USER_ID="${FORTISAI_HONCHO_DEFAULT_USER_ID:-fortisai_default_user}"
+FORTISAI_HONCHO_DEFAULT_SESSION_ID="${FORTISAI_HONCHO_DEFAULT_SESSION_ID:-default}"
+FORTISAI_HONCHO_SESSION_SCOPE="${FORTISAI_HONCHO_SESSION_SCOPE:-user}"
+FORTISAI_HONCHO_TIMEOUT_SECONDS="${FORTISAI_HONCHO_TIMEOUT_SECONDS:-10}"
+FORTISAI_HONCHO_CONTEXT_LIMIT_CHARS="${FORTISAI_HONCHO_CONTEXT_LIMIT_CHARS:-6000}"
+FORTISAI_HONCHO_CONTEXT_MAX_MESSAGES="${FORTISAI_HONCHO_CONTEXT_MAX_MESSAGES:-12}"
+QDRANT_INTERNAL_URL="${QDRANT_INTERNAL_URL:-http://qdrant.fortisai.local:6333}"
+QDRANT_API_KEY="${QDRANT_API_KEY:-difyai123456}"
+FIRECRAWL_INTERNAL_URL="${FIRECRAWL_INTERNAL_URL:-http://fortisai-firecrawl.fortisai.local:3002}"
+FIRECRAWL_API_KEY="${FIRECRAWL_API_KEY:-fortisai-firecrawl-dev-api-key}"
+FORTISAI_RAG_ENABLED="${FORTISAI_RAG_ENABLED:-true}"
+FORTISAI_RAG_QDRANT_URL="${FORTISAI_RAG_QDRANT_URL:-$QDRANT_INTERNAL_URL}"
+FORTISAI_RAG_QDRANT_API_KEY="${FORTISAI_RAG_QDRANT_API_KEY:-$QDRANT_API_KEY}"
+FORTISAI_RAG_QDRANT_COLLECTION="${FORTISAI_RAG_QDRANT_COLLECTION:-fortisai_general_knowledge}"
+FORTISAI_RAG_VECTOR_LIMIT="${FORTISAI_RAG_VECTOR_LIMIT:-5}"
+FORTISAI_RAG_VECTOR_SCORE_THRESHOLD="${FORTISAI_RAG_VECTOR_SCORE_THRESHOLD:-0.20}"
+FORTISAI_RAG_CONTEXT_LIMIT_CHARS="${FORTISAI_RAG_CONTEXT_LIMIT_CHARS:-8000}"
+FORTISAI_RAG_EMBEDDING_BASE_URL="${FORTISAI_RAG_EMBEDDING_BASE_URL:-http://fortisai-llama-server-secondary.fortisai.local:8012/v1}"
+FORTISAI_RAG_EMBEDDING_API_KEY="${FORTISAI_RAG_EMBEDDING_API_KEY:-$FORTISAI_LLAMA_OPENAI_API_KEY}"
+FORTISAI_RAG_EMBEDDING_MODEL="${FORTISAI_RAG_EMBEDDING_MODEL:-}"
+FORTISAI_RAG_EMBEDDING_INPUT_CHARS="${FORTISAI_RAG_EMBEDDING_INPUT_CHARS:-8000}"
+FORTISAI_RAG_FIRECRAWL_URL="${FORTISAI_RAG_FIRECRAWL_URL:-$FIRECRAWL_INTERNAL_URL}"
+FORTISAI_RAG_FIRECRAWL_API_KEY="${FORTISAI_RAG_FIRECRAWL_API_KEY:-$FIRECRAWL_API_KEY}"
+FORTISAI_RAG_WEB_LIMIT="${FORTISAI_RAG_WEB_LIMIT:-3}"
+FORTISAI_RAG_WEB_TIMEOUT_SECONDS="${FORTISAI_RAG_WEB_TIMEOUT_SECONDS:-20}"
+FORTISAI_RAG_QUERY_CHARS="${FORTISAI_RAG_QUERY_CHARS:-600}"
+FORTISAI_RAG_UPSERT_WEB_RESULTS="${FORTISAI_RAG_UPSERT_WEB_RESULTS:-true}"
+FORTISAI_RAG_BACKGROUND_WEB_UPSERT="${FORTISAI_RAG_BACKGROUND_WEB_UPSERT:-true}"
+FORTISAI_TOOL_EXECUTION_BRIDGE_ENABLED="${FORTISAI_TOOL_EXECUTION_BRIDGE_ENABLED:-true}"
+FORTISAI_TOOL_EXECUTION_MAX_ROUNDS="${FORTISAI_TOOL_EXECUTION_MAX_ROUNDS:-1}"
+FORTISAI_TOOL_EXECUTION_TIMEOUT_SECONDS="${FORTISAI_TOOL_EXECUTION_TIMEOUT_SECONDS:-300}"
+FORTISAI_TOOL_EXECUTION_PREFLIGHT_LLM_TIMEOUT_SECONDS="${FORTISAI_TOOL_EXECUTION_PREFLIGHT_LLM_TIMEOUT_SECONDS:-300}"
+FORTISAI_TOOL_EXECUTION_RESULT_LIMIT_CHARS="${FORTISAI_TOOL_EXECUTION_RESULT_LIMIT_CHARS:-12000}"
+FORTISAI_TOOL_EXECUTION_REGISTRY_JSON="${FORTISAI_TOOL_EXECUTION_REGISTRY_JSON:-}"
+FORTISAI_TOOL_EXECUTION_SKILL_DISCOVERY_ENABLED="${FORTISAI_TOOL_EXECUTION_SKILL_DISCOVERY_ENABLED:-true}"
+FORTISAI_TOOL_EXECUTION_OPENWEBUI_SKILL_API_ENABLED="${FORTISAI_TOOL_EXECUTION_OPENWEBUI_SKILL_API_ENABLED:-true}"
+FORTISAI_TOOL_EXECUTION_SKILL_REFRESH_SECONDS="${FORTISAI_TOOL_EXECUTION_SKILL_REFRESH_SECONDS:-300}"
+FORTISAI_TOOL_EXECUTION_OPENAPI_FETCH_TIMEOUT_SECONDS="${FORTISAI_TOOL_EXECUTION_OPENAPI_FETCH_TIMEOUT_SECONDS:-5}"
+FORTISAI_TOOL_MEMORY_QDRANT_ENABLED="${FORTISAI_TOOL_MEMORY_QDRANT_ENABLED:-true}"
+FORTISAI_TOOL_MEMORY_QDRANT_COLLECTION="${FORTISAI_TOOL_MEMORY_QDRANT_COLLECTION:-fortisai_tool_registry}"
+FORTISAI_TOOL_MEMORY_UPSERT_MAX="${FORTISAI_TOOL_MEMORY_UPSERT_MAX:-500}"
+FORTISAI_TOOL_MEMORY_SEARCH_LIMIT="${FORTISAI_TOOL_MEMORY_SEARCH_LIMIT:-8}"
+FORTISAI_TOOL_MEMORY_SCORE_THRESHOLD="${FORTISAI_TOOL_MEMORY_SCORE_THRESHOLD:-0.12}"
+FORTISAI_DAYTONA_DEFAULT_SANDBOX="${FORTISAI_DAYTONA_DEFAULT_SANDBOX:-fortisai-openwebui-smoke}"
+FORTISAI_OPENWEBUI_URL="${FORTISAI_OPENWEBUI_URL:-http://fortisai-openwebui.fortisai.local:8080}"
+FORTISAI_OPENWEBUI_DEFAULT_API_KEY_USER="${FORTISAI_OPENWEBUI_DEFAULT_API_KEY_USER:-LesterAJohn@gmail.com}"
+FORTISAI_WEBSEARCH_OPENAPI_BASE_URL="${FORTISAI_WEBSEARCH_OPENAPI_BASE_URL:-http://fortisai-mcp-openapi-websearch.fortisai.local:8097}"
+
+N8N_BASE_URL="${N8N_BASE_URL:-http://fortisai-n8n.fortisai.local:5678}"
+N8N_API_KEY="${N8N_API_KEY:-}"
+N8N_MCP_CONFIG_FILE="${N8N_MCP_CONFIG_FILE:-$FORTISAI_DEV_HOME/sqlcl-mcp/mcp.json}"
+N8N_MCP_URL="${N8N_MCP_URL:-${N8N_BASE_URL%/}/mcp-server/http}"
+N8N_MCP_BEARER_TOKEN="${N8N_MCP_BEARER_TOKEN:-}"
+N8N_BASIC_AUTH_USER="${N8N_BASIC_AUTH_USER:-admin}"
+N8N_BASIC_AUTH_PASSWORD="${N8N_BASIC_AUTH_PASSWORD:-change-me-n8n}"
+
+DEBUG_SQLCL_OPENAPI_URL="${DEBUG_SQLCL_OPENAPI_URL:-http://fortisai-mcp-openapi-sqlcl.fortisai.local:8091/openapi.json}"
+DEBUG_N8N_OPENAPI_URL="${DEBUG_N8N_OPENAPI_URL:-http://fortisai-mcp-openapi-n8n.fortisai.local:8092/openapi.json}"
+DEBUG_DIFY_OPENAPI_URL="${DEBUG_DIFY_OPENAPI_URL:-http://fortisai-mcp-openapi-dify.fortisai.local:8093/openapi.json}"
+
+PROXMOX_API_KEY="${PROXMOX_API_KEY:-fortisai-proxmox-openapi-dev-key}"
+PROXMOX_API_STRICT_AUTH="${PROXMOX_API_STRICT_AUTH:-false}"
+
+proxmox_configured="false"
+proxmox_bridge_enabled_normalized="$(printf '%s' "$PROXMOX_BRIDGE_ENABLED" | tr '[:upper:]' '[:lower:]')"
+case "$proxmox_bridge_enabled_normalized" in
+  1|true|yes|on)
+    proxmox_configured="true"
+    ;;
+  0|false|no|off)
+    proxmox_configured="false"
+    ;;
+  *)
+    if [[ -f "$PROXMOX_MCP_CONFIG_FILE" ]] || [[ -n "${PROXMOX_HOST:-}" && -n "${PROXMOX_USER:-}" && -n "${PROXMOX_TOKEN_NAME:-}" && -n "${PROXMOX_TOKEN_VALUE:-}" ]]; then
+      proxmox_configured="true"
+    fi
+    ;;
+esac
+
+if [[ -f "$DIFY_KEYS_JSON_FILE" ]]; then
+  eval "$(DIFY_KEYS_JSON_FILE="$DIFY_KEYS_JSON_FILE" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+cfg = Path(os.environ["DIFY_KEYS_JSON_FILE"])
+try:
+    data = json.loads(cfg.read_text())
+except Exception:
+    data = {}
+
+api = str(data.get("dify_api_key") or data.get("dify_admin_api_key") or data.get("admin_api_key") or "").strip()
+knowledge = str(data.get("dify_knowledge_api_key") or "").strip()
+
+print(f'JSON_DIFY_API_KEY="{api}"')
+print(f'JSON_DIFY_KNOWLEDGE_API_KEY="{knowledge}"')
+PY
+)"
+  if [[ -z "$DIFY_API_KEY" ]]; then
+    DIFY_API_KEY="$JSON_DIFY_API_KEY"
+  fi
+  if [[ -z "$ADMIN_API_KEY" ]]; then
+    ADMIN_API_KEY="$DIFY_API_KEY"
+  fi
+  if [[ -z "$KNOWLEDGE_API_KEY" ]]; then
+    KNOWLEDGE_API_KEY="$JSON_DIFY_KNOWLEDGE_API_KEY"
+  fi
+fi
+
+# Prefer real Dify admin key from running API container when available.
+if podman inspect -f '{{.State.Running}}' docker_api_1 >/dev/null 2>&1; then
+  runtime_admin_key="$(podman exec docker_api_1 sh -lc 'printf %s "$ADMIN_API_KEY"' 2>/dev/null || true)"
+  runtime_admin_key="$(printf '%s' "$runtime_admin_key" | tr -d '\r\n')"
+  if [[ -n "$runtime_admin_key" ]]; then
+    DIFY_ADMIN_API_KEY="$runtime_admin_key"
+    ADMIN_API_KEY="$runtime_admin_key"
+  fi
+fi
+
+# Auto-resolve workspace id for admin console API calls when not explicitly set.
+if [[ -z "$DIFY_ADMIN_WORKSPACE_ID" ]]; then
+  if podman inspect -f '{{.State.Running}}' docker_api_1 >/dev/null 2>&1 && podman inspect -f '{{.State.Running}}' fortisai-pgvector >/dev/null 2>&1; then
+    db_name="$(podman exec docker_api_1 sh -lc 'printf %s "$DB_DATABASE"' 2>/dev/null || true)"
+    db_user="$(podman exec docker_api_1 sh -lc 'printf %s "$DB_USERNAME"' 2>/dev/null || true)"
+    db_name="$(printf '%s' "$db_name" | tr -d '\r\n')"
+    db_user="$(printf '%s' "$db_user" | tr -d '\r\n')"
+    if [[ -n "$db_name" && -n "$db_user" ]]; then
+      resolved_workspace_id="$(podman exec fortisai-pgvector psql -U "$db_user" -d "$db_name" -tAc "SELECT id FROM tenants ORDER BY created_at DESC LIMIT 1;" 2>/dev/null || true)"
+      resolved_workspace_id="$(printf '%s' "$resolved_workspace_id" | tr -d '[:space:]')"
+      if [[ -n "$resolved_workspace_id" ]]; then
+        DIFY_ADMIN_WORKSPACE_ID="$resolved_workspace_id"
+      fi
+    fi
+  fi
+fi
+
+if [[ -z "$N8N_API_KEY" && -f "$N8N_MCP_CONFIG_FILE" ]]; then
+  N8N_API_KEY="$(N8N_MCP_CONFIG_FILE="$N8N_MCP_CONFIG_FILE" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+cfg = Path(os.environ["N8N_MCP_CONFIG_FILE"])
+try:
+    data = json.loads(cfg.read_text())
+except Exception:
+    print("")
+    raise SystemExit(0)
+
+print(str(data.get("mcpServers", {}).get("fortisai-n8n", {}).get("env", {}).get("N8N_API_KEY", "")).strip())
+PY
+)"
+fi
+
+if [[ -z "$N8N_MCP_BEARER_TOKEN" && -f "$N8N_MCP_CONFIG_FILE" ]]; then
+  N8N_MCP_BEARER_TOKEN="$(N8N_MCP_CONFIG_FILE="$N8N_MCP_CONFIG_FILE" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+cfg = Path(os.environ["N8N_MCP_CONFIG_FILE"])
+try:
+  data = json.loads(cfg.read_text())
+except Exception:
+  print("")
+  raise SystemExit(0)
+
+headers = data.get("mcpServers", {}).get("n8n-mcp", {}).get("headers", {})
+auth = str(headers.get("Authorization", "")).strip()
+if auth.lower().startswith("bearer "):
+  auth = auth[7:].strip()
+print(auth)
+PY
+)"
+fi
+
+if ! podman network exists "$SHARED_NETWORK" >/dev/null 2>&1; then
+  echo "Podman network not found: $SHARED_NETWORK" >&2
+  exit 1
+fi
+
+ensure_container() {
+  local name="$1"
+  shift
+
+  podman rm -f "$name" >/dev/null 2>&1 || true
+  podman run -d --name "$name" "$@" >/dev/null
+  echo "Started $name"
+}
+
+ensure_proxmox_upstream_image() {
+  local force_build_normalized
+  force_build_normalized="$(printf '%s' "$PROXMOX_UPSTREAM_FORCE_BUILD" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$force_build_normalized" != "1" && "$force_build_normalized" != "true" && "$force_build_normalized" != "yes" && "$force_build_normalized" != "on" ]]; then
+    if podman image exists "$PROXMOX_UPSTREAM_IMAGE" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  mkdir -p "$(dirname "$PROXMOX_UPSTREAM_BUILD_DIR")"
+  if [[ -d "$PROXMOX_UPSTREAM_BUILD_DIR/.git" ]]; then
+    git -C "$PROXMOX_UPSTREAM_BUILD_DIR" fetch --all --prune
+    git -C "$PROXMOX_UPSTREAM_BUILD_DIR" checkout "$PROXMOX_UPSTREAM_BUILD_REF"
+    git -C "$PROXMOX_UPSTREAM_BUILD_DIR" pull --ff-only || true
+  else
+    rm -rf "$PROXMOX_UPSTREAM_BUILD_DIR"
+    git clone "$PROXMOX_UPSTREAM_BUILD_REPO" "$PROXMOX_UPSTREAM_BUILD_DIR"
+    git -C "$PROXMOX_UPSTREAM_BUILD_DIR" checkout "$PROXMOX_UPSTREAM_BUILD_REF"
+  fi
+
+  podman build -t "$PROXMOX_UPSTREAM_IMAGE" "$PROXMOX_UPSTREAM_BUILD_DIR"
+}
+
+vault_env_args=(
+  -e FORTISAI_VAULT_ADDR="$FORTISAI_VAULT_ADDR"
+  -e VAULT_ADDR="$VAULT_ADDR"
+)
+if [[ -n "$VAULT_TOKEN" ]]; then
+  vault_env_args+=( -e VAULT_TOKEN="$VAULT_TOKEN" )
+fi
+
+ensure_container "$SQLCL_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${SQLCL_BRIDGE_PORT}:8091" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  -e FORTISAI_DEV_HOME="$FORTISAI_DEV_HOME" \
+  "${vault_env_args[@]}" \
+  -e SQLCL_BRIDGE_PORT="8091" \
+  -e ORACLE_DB_WALLET_ENV_FILE="$FORTISAI_DEV_HOME/oracle-wallet/oracle-db.env" \
+  -e ORACLE_DB_HOST="$ORACLE_DB_HOST" \
+  -e ORACLE_DB_PORT="$ORACLE_DB_PORT" \
+  -e ORACLE_DB_SERVICE_NAME="$ORACLE_DB_SERVICE_NAME" \
+  -e ORACLE_DB_USER="$ORACLE_DB_USER" \
+  -e ORACLE_DB_PASSWORD="$ORACLE_DB_PASSWORD" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn oracledb >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/sqlcl-mcp/sqlcl-openapi-bridge.py"
+
+ensure_container "$N8N_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${N8N_BRIDGE_PORT}:8092" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e N8N_BRIDGE_PORT="8092" \
+  -e N8N_BASE_URL="$N8N_BASE_URL" \
+  -e N8N_API_KEY="$N8N_API_KEY" \
+  -e N8N_MCP_URL="$N8N_MCP_URL" \
+  -e N8N_MCP_BEARER_TOKEN="$N8N_MCP_BEARER_TOKEN" \
+  -e N8N_BASIC_AUTH_USER="$N8N_BASIC_AUTH_USER" \
+  -e N8N_BASIC_AUTH_PASSWORD="$N8N_BASIC_AUTH_PASSWORD" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/n8n-mcp/n8n-openapi-bridge.py"
+
+ensure_container "$DIFY_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${DIFY_BRIDGE_PORT}:8093" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e DIFY_BRIDGE_PORT="8093" \
+  -e DIFY_BASE_URL="$DIFY_BASE_URL" \
+  -e ADMIN_API_KEY_ENABLE="true" \
+  -e DIFY_API_KEY="$DIFY_API_KEY" \
+  -e DIFY_ADMIN_API_KEY="$DIFY_ADMIN_API_KEY" \
+  -e DIFY_CONSOLE_ACCESS_TOKEN="$DIFY_CONSOLE_ACCESS_TOKEN" \
+  -e DIFY_ADMIN_WORKSPACE_ID="$DIFY_ADMIN_WORKSPACE_ID" \
+  -e DIFY_TIMEOUT_SECONDS="$DIFY_TIMEOUT_SECONDS" \
+  -e DIFY_DB_HOST="$DIFY_DB_HOST" \
+  -e DIFY_DB_PORT="$DIFY_DB_PORT" \
+  -e DIFY_DB_NAME="$DIFY_DB_NAME" \
+  -e DIFY_DB_USER="$DIFY_DB_USER" \
+  -e DIFY_DB_PASSWORD="$DIFY_DB_PASSWORD" \
+  -e ADMIN_API_KEY="$ADMIN_API_KEY" \
+  -e KNOWLEDGE_API_KEY="$KNOWLEDGE_API_KEY" \
+  -e FORTISAI_OPENAI_ROUTER_MODEL="$FORTISAI_OPENAI_ROUTER_MODEL" \
+  -e FORTISAI_OPENAI_ROUTER_APP_NAME="$FORTISAI_OPENAI_ROUTER_APP_NAME" \
+  -e FORTISAI_OPENAI_ROUTER_CLASSIFICATION_FILE="$FORTISAI_OPENAI_ROUTER_CLASSIFICATION_FILE" \
+  -e FORTISAI_OPENAI_ROUTER_TIMEOUT_SECONDS="$FORTISAI_OPENAI_ROUTER_TIMEOUT_SECONDS" \
+  -e FORTISAI_OPENAI_ROUTER_FORCE_LOAD_TIMEOUT_SECONDS="$FORTISAI_OPENAI_ROUTER_FORCE_LOAD_TIMEOUT_SECONDS" \
+  -e FORTISAI_OPENAI_ROUTER_STREAM_KEEPALIVE_SECONDS="$FORTISAI_OPENAI_ROUTER_STREAM_KEEPALIVE_SECONDS" \
+  -e FORTISAI_OPENAI_ROUTER_DEFAULT_MAX_TOKENS="$FORTISAI_OPENAI_ROUTER_DEFAULT_MAX_TOKENS" \
+  -e FORTISAI_OPENAI_ROUTER_MAX_TOKENS_HARD_LIMIT="$FORTISAI_OPENAI_ROUTER_MAX_TOKENS_HARD_LIMIT" \
+  -e FORTISAI_OPENAI_ROUTER_PREFER_LOADED_MODELS="$FORTISAI_OPENAI_ROUTER_PREFER_LOADED_MODELS" \
+  -e FORTISAI_OPENAI_ROUTER_MODEL_STATUS_TIMEOUT_SECONDS="$FORTISAI_OPENAI_ROUTER_MODEL_STATUS_TIMEOUT_SECONDS" \
+  -e FORTISAI_OPENAI_ROUTER_MODEL_STATUS_CACHE_SECONDS="$FORTISAI_OPENAI_ROUTER_MODEL_STATUS_CACHE_SECONDS" \
+  -e FORTISAI_LLAMA_OPENAI_BASE_URL="$FORTISAI_LLAMA_OPENAI_BASE_URL" \
+  -e FORTISAI_LLAMA_OPENAI_API_KEY="$FORTISAI_LLAMA_OPENAI_API_KEY" \
+  -e FORTISAI_OPENAI_EMBEDDING_MODEL="$FORTISAI_OPENAI_EMBEDDING_MODEL" \
+  -e FORTISAI_HONCHO_MODEL="$FORTISAI_HONCHO_MODEL" \
+  -e FORTISAI_HONCHO_BASE_URL="$FORTISAI_HONCHO_BASE_URL" \
+  -e FORTISAI_HONCHO_API_KEY="$FORTISAI_HONCHO_API_KEY" \
+  -e FORTISAI_HONCHO_REQUIRED="$FORTISAI_HONCHO_REQUIRED" \
+  -e FORTISAI_HONCHO_WORKSPACE_ID="$FORTISAI_HONCHO_WORKSPACE_ID" \
+  -e FORTISAI_HONCHO_ASSISTANT_PEER_ID="$FORTISAI_HONCHO_ASSISTANT_PEER_ID" \
+  -e FORTISAI_HONCHO_DEFAULT_USER_ID="$FORTISAI_HONCHO_DEFAULT_USER_ID" \
+  -e FORTISAI_HONCHO_DEFAULT_SESSION_ID="$FORTISAI_HONCHO_DEFAULT_SESSION_ID" \
+  -e FORTISAI_HONCHO_SESSION_SCOPE="$FORTISAI_HONCHO_SESSION_SCOPE" \
+  -e FORTISAI_HONCHO_TIMEOUT_SECONDS="$FORTISAI_HONCHO_TIMEOUT_SECONDS" \
+  -e FORTISAI_HONCHO_CONTEXT_LIMIT_CHARS="$FORTISAI_HONCHO_CONTEXT_LIMIT_CHARS" \
+  -e FORTISAI_HONCHO_CONTEXT_MAX_MESSAGES="$FORTISAI_HONCHO_CONTEXT_MAX_MESSAGES" \
+  -e FORTISAI_RAG_ENABLED="$FORTISAI_RAG_ENABLED" \
+  -e FORTISAI_RAG_QDRANT_URL="$FORTISAI_RAG_QDRANT_URL" \
+  -e FORTISAI_RAG_QDRANT_API_KEY="$FORTISAI_RAG_QDRANT_API_KEY" \
+  -e FORTISAI_RAG_QDRANT_COLLECTION="$FORTISAI_RAG_QDRANT_COLLECTION" \
+  -e FORTISAI_RAG_VECTOR_LIMIT="$FORTISAI_RAG_VECTOR_LIMIT" \
+  -e FORTISAI_RAG_VECTOR_SCORE_THRESHOLD="$FORTISAI_RAG_VECTOR_SCORE_THRESHOLD" \
+  -e FORTISAI_RAG_CONTEXT_LIMIT_CHARS="$FORTISAI_RAG_CONTEXT_LIMIT_CHARS" \
+  -e FORTISAI_RAG_EMBEDDING_BASE_URL="$FORTISAI_RAG_EMBEDDING_BASE_URL" \
+  -e FORTISAI_RAG_EMBEDDING_API_KEY="$FORTISAI_RAG_EMBEDDING_API_KEY" \
+  -e FORTISAI_RAG_EMBEDDING_MODEL="$FORTISAI_RAG_EMBEDDING_MODEL" \
+  -e FORTISAI_RAG_EMBEDDING_INPUT_CHARS="$FORTISAI_RAG_EMBEDDING_INPUT_CHARS" \
+  -e FORTISAI_RAG_FIRECRAWL_URL="$FORTISAI_RAG_FIRECRAWL_URL" \
+  -e FORTISAI_RAG_FIRECRAWL_API_KEY="$FORTISAI_RAG_FIRECRAWL_API_KEY" \
+  -e FORTISAI_RAG_WEB_LIMIT="$FORTISAI_RAG_WEB_LIMIT" \
+  -e FORTISAI_RAG_WEB_TIMEOUT_SECONDS="$FORTISAI_RAG_WEB_TIMEOUT_SECONDS" \
+  -e FORTISAI_RAG_QUERY_CHARS="$FORTISAI_RAG_QUERY_CHARS" \
+  -e FORTISAI_RAG_UPSERT_WEB_RESULTS="$FORTISAI_RAG_UPSERT_WEB_RESULTS" \
+  -e FORTISAI_RAG_BACKGROUND_WEB_UPSERT="$FORTISAI_RAG_BACKGROUND_WEB_UPSERT" \
+  -e FORTISAI_TOOL_EXECUTION_BRIDGE_ENABLED="$FORTISAI_TOOL_EXECUTION_BRIDGE_ENABLED" \
+  -e FORTISAI_TOOL_EXECUTION_MAX_ROUNDS="$FORTISAI_TOOL_EXECUTION_MAX_ROUNDS" \
+  -e FORTISAI_TOOL_EXECUTION_TIMEOUT_SECONDS="$FORTISAI_TOOL_EXECUTION_TIMEOUT_SECONDS" \
+  -e FORTISAI_TOOL_EXECUTION_PREFLIGHT_LLM_TIMEOUT_SECONDS="$FORTISAI_TOOL_EXECUTION_PREFLIGHT_LLM_TIMEOUT_SECONDS" \
+  -e FORTISAI_TOOL_EXECUTION_RESULT_LIMIT_CHARS="$FORTISAI_TOOL_EXECUTION_RESULT_LIMIT_CHARS" \
+  -e FORTISAI_TOOL_EXECUTION_REGISTRY_JSON="$FORTISAI_TOOL_EXECUTION_REGISTRY_JSON" \
+  -e FORTISAI_TOOL_EXECUTION_SKILL_DISCOVERY_ENABLED="$FORTISAI_TOOL_EXECUTION_SKILL_DISCOVERY_ENABLED" \
+  -e FORTISAI_TOOL_EXECUTION_OPENWEBUI_SKILL_API_ENABLED="$FORTISAI_TOOL_EXECUTION_OPENWEBUI_SKILL_API_ENABLED" \
+  -e FORTISAI_TOOL_EXECUTION_SKILL_REFRESH_SECONDS="$FORTISAI_TOOL_EXECUTION_SKILL_REFRESH_SECONDS" \
+  -e FORTISAI_TOOL_EXECUTION_OPENAPI_FETCH_TIMEOUT_SECONDS="$FORTISAI_TOOL_EXECUTION_OPENAPI_FETCH_TIMEOUT_SECONDS" \
+  -e FORTISAI_TOOL_MEMORY_QDRANT_ENABLED="$FORTISAI_TOOL_MEMORY_QDRANT_ENABLED" \
+  -e FORTISAI_TOOL_MEMORY_QDRANT_COLLECTION="$FORTISAI_TOOL_MEMORY_QDRANT_COLLECTION" \
+  -e FORTISAI_TOOL_MEMORY_UPSERT_MAX="$FORTISAI_TOOL_MEMORY_UPSERT_MAX" \
+  -e FORTISAI_TOOL_MEMORY_SEARCH_LIMIT="$FORTISAI_TOOL_MEMORY_SEARCH_LIMIT" \
+  -e FORTISAI_TOOL_MEMORY_SCORE_THRESHOLD="$FORTISAI_TOOL_MEMORY_SCORE_THRESHOLD" \
+  -e FORTISAI_DAYTONA_DEFAULT_SANDBOX="$FORTISAI_DAYTONA_DEFAULT_SANDBOX" \
+  -e FORTISAI_OPENWEBUI_URL="$FORTISAI_OPENWEBUI_URL" \
+  -e FORTISAI_OPENWEBUI_DEFAULT_API_KEY_USER="$FORTISAI_OPENWEBUI_DEFAULT_API_KEY_USER" \
+  -e FORTISAI_WEBSEARCH_OPENAPI_BASE_URL="$FORTISAI_WEBSEARCH_OPENAPI_BASE_URL" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn psycopg2-binary >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/dify-mcp/dify-openapi-bridge.py"
+
+ensure_container "$DEBUG_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${DEBUG_BRIDGE_PORT}:8094" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e DEBUG_BRIDGE_PORT="8094" \
+  -e DEBUG_SQLCL_OPENAPI_URL="$DEBUG_SQLCL_OPENAPI_URL" \
+  -e DEBUG_N8N_OPENAPI_URL="$DEBUG_N8N_OPENAPI_URL" \
+  -e DEBUG_DIFY_OPENAPI_URL="$DEBUG_DIFY_OPENAPI_URL" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/debug-mcp/debug-openapi-bridge.py"
+
+mkdir -p "$CODEINDEXER_STATE_DIR" "$CODEINDEXER_GITHUB_DIR"
+ensure_container "$CODEINDEXER_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${CODEINDEXER_BRIDGE_PORT}:8096" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -v "$CODEINDEXER_REPO_DIR:/codeindexer" \
+  -v "$CODEINDEXER_STATE_DIR:/codeindexer-state" \
+  -v "$CODEINDEXER_GITHUB_DIR:/codeindexer-github" \
+  "${vault_env_args[@]}" \
+  -e CODEINDEXER_BRIDGE_PORT="8096" \
+  -e CODEINDEXER_REPO_DIR="/codeindexer" \
+  -e CODEINDEXER_STATE_DIR="/codeindexer-state" \
+  -e CODEINDEXER_WORKSPACE="$CODEINDEXER_WORKSPACE" \
+  -e CODEINDEXER_GITHUB_WORKSPACE="/codeindexer-github" \
+  -e CODEINDEXER_HOST_WORKSPACE="$CODEINDEXER_HOST_WORKSPACE" \
+  -e MILVUS_ADDRESS="$CODEINDEXER_MILVUS_ADDRESS" \
+  -e MILVUS_TOKEN="$CODEINDEXER_MILVUS_TOKEN" \
+  -e OPENAI_API_KEY="$CODEINDEXER_OPENAI_API_KEY" \
+  -e OPENAI_BASE_URL="$CODEINDEXER_OPENAI_BASE_URL" \
+  -e OPENAI_EMBEDDING_MODEL="$CODEINDEXER_OPENAI_EMBEDDING_MODEL" \
+  -e OPENAI_EMBEDDING_DIMENSION="$CODEINDEXER_OPENAI_EMBEDDING_DIMENSION" \
+  -e CODEINDEXER_MCP_TIMEOUT_MS="$CODEINDEXER_MCP_TIMEOUT_MS" \
+  -e CODEINDEXER_GITHUB_TOKEN="$CODEINDEXER_GITHUB_TOKEN" \
+  -e CODEINDEXER_GITHUB_ALLOWED_ORGS="$CODEINDEXER_GITHUB_ALLOWED_ORGS" \
+  -e CODEINDEXER_GITHUB_ALLOWED_REPOS="$CODEINDEXER_GITHUB_ALLOWED_REPOS" \
+  docker.io/node:20-bookworm \
+  sh -lc "command -v git >/dev/null 2>&1 || (apt-get update >/tmp/apt.log 2>&1 && apt-get install -y git >/tmp/apt-install.log 2>&1); exec node /workspace/Development_Environment/mcp/codeindexer-mcp/codeindexer-openapi-bridge.mjs"
+
+ensure_container "$WEBSEARCH_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${WEBSEARCH_BRIDGE_PORT}:8097" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e WEBSEARCH_BRIDGE_PORT="8097" \
+  -e FIRECRAWL_INTERNAL_URL="$FIRECRAWL_INTERNAL_URL" \
+  -e FIRECRAWL_URL="$FIRECRAWL_INTERNAL_URL" \
+  -e FIRECRAWL_API_KEY="$FIRECRAWL_API_KEY" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/websearch-mcp/websearch-openapi-bridge.py"
+
+ensure_container "$DAYTONA_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${DAYTONA_BRIDGE_PORT}:8098" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e DAYTONA_BRIDGE_PORT="8098" \
+  -e DAYTONA_API_URL="$DAYTONA_API_URL" \
+  -e DAYTONA_DASHBOARD_URL="$DAYTONA_DASHBOARD_URL" \
+  -e DAYTONA_PROXY_URL="$DAYTONA_PROXY_URL" \
+  -e DAYTONA_API_KEY="$DAYTONA_API_KEY" \
+  -e DAYTONA_ORG_ID="$DAYTONA_ORG_ID" \
+  -e DAYTONA_DEFAULT_SNAPSHOT="$DAYTONA_DEFAULT_SNAPSHOT" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/daytona-mcp/daytona-openapi-bridge.py"
+
+
+ensure_container "$COMPOSIO_LOCAL_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${COMPOSIO_LOCAL_HOST_PORT}:8090" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e COMPOSIO_LOCAL_PORT="8090" \
+  -e COMPOSIO_API_KEY="$COMPOSIO_API_KEY" \
+  -e COMPOSIO_UPSTREAM_MCP_URL="$COMPOSIO_UPSTREAM_MCP_URL" \
+  -e COMPOSIO_MCP_HEADERS_JSON="$COMPOSIO_MCP_HEADERS_JSON" \
+  -e COMPOSIO_USER_ID="$COMPOSIO_USER_ID" \
+  -e COMPOSIO_TOOLKITS="$COMPOSIO_TOOLKITS" \
+  -e COMPOSIO_SESSION_ID="$COMPOSIO_SESSION_ID" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn requests composio >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/composio-mcp/composio-local-mcp-proxy.py"
+
+ensure_container "$COMPOSIO_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${COMPOSIO_BRIDGE_PORT}:8099" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e COMPOSIO_MCP_URL="$COMPOSIO_MCP_URL" \
+  -e COMPOSIO_API_KEY="$COMPOSIO_API_KEY" \
+  -e COMPOSIO_ALLOWED_TOOLKITS="$COMPOSIO_ALLOWED_TOOLKITS" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn requests >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/composio-mcp/composio-openapi-bridge.py"
+
+ensure_container "$OPENMETADATA_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${OPENMETADATA_BRIDGE_PORT}:8100" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e OPENMETADATA_BASE_URL="$OPENMETADATA_BASE_URL" \
+  -e OPENMETADATA_API_TOKEN="$OPENMETADATA_API_TOKEN" \
+  -e OPENMETADATA_ALLOW_WRITE="$OPENMETADATA_ALLOW_WRITE" \
+  -e OPENMETADATA_ALLOW_SAMPLE_DATA="$OPENMETADATA_ALLOW_SAMPLE_DATA" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn requests >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/openmetadata-mcp/openmetadata-openapi-bridge.py"
+
+ensure_container "$AOL_IMAP_BRIDGE_CONTAINER" \
+  --restart unless-stopped \
+  --network "$SHARED_NETWORK" \
+  -p "${AOL_IMAP_BRIDGE_PORT}:8101" \
+  -v "$REPO_ROOT:/workspace:ro" \
+  -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONUNBUFFERED=1 \
+  "${vault_env_args[@]}" \
+  -e AOL_IMAP_BRIDGE_PORT="8101" \
+  -e AOL_IMAP_HOST="$AOL_IMAP_HOST" \
+  -e AOL_IMAP_PORT="$AOL_IMAP_PORT" \
+  -e AOL_IMAP_TIMEOUT_SECONDS="$AOL_IMAP_TIMEOUT_SECONDS" \
+  -e AOL_IMAP_SPAM_FOLDER="$AOL_IMAP_SPAM_FOLDER" \
+  docker.io/python:3.11-slim \
+  sh -lc "pip install --no-cache-dir fastapi uvicorn >/tmp/pip.log 2>&1 && python /workspace/Development_Environment/mcp/aol-imap-mcp/aol-imap-openapi-bridge.py"
+
+if [[ "$proxmox_configured" == "true" ]]; then
+  ensure_proxmox_upstream_image
+
+  proxmox_args=(
+    --restart unless-stopped
+    --network "$SHARED_NETWORK"
+    "${vault_env_args[@]}"
+    -e FORTISAI_DEV_HOME="$FORTISAI_DEV_HOME"
+    -e PROXMOX_MCP_MODE="openapi"
+    -e API_HOST="0.0.0.0"
+    -e API_PORT="8811"
+    -e PROXMOX_API_KEY="$PROXMOX_API_KEY"
+    -e PROXMOX_API_STRICT_AUTH="$PROXMOX_API_STRICT_AUTH"
+  )
+  if [[ -n "$PROXMOX_DEFAULT_ENVIRONMENT" ]]; then
+    proxmox_args+=( -e PROXMOX_DEFAULT_ENVIRONMENT="$PROXMOX_DEFAULT_ENVIRONMENT" )
+  fi
+
+  for env_name in PROXMOX_HOST PROXMOX_PORT PROXMOX_USER PROXMOX_TOKEN_NAME PROXMOX_TOKEN_VALUE PROXMOX_VERIFY_SSL PROXMOX_DEV_MODE PROXMOX_SERVICE LOG_LEVEL; do
+    if [[ -n "${!env_name:-}" ]]; then
+      proxmox_args+=( -e "$env_name=${!env_name}" )
+    fi
+  done
+
+  if [[ -f "$PROXMOX_MCP_CONFIG_FILE" ]]; then
+    proxmox_args+=(
+      -v "$PROXMOX_MCP_CONFIG_FILE:/app/proxmox-config/config.json:ro"
+      -e PROXMOX_MCP_CONFIG="/app/proxmox-config/config.json"
+    )
+  fi
+
+  ensure_container "$PROXMOX_UPSTREAM_CONTAINER" "${proxmox_args[@]}" "$PROXMOX_UPSTREAM_IMAGE"
+
+  proxmox_facade_args=(
+    --restart unless-stopped
+    --network "$SHARED_NETWORK"
+    -p "${PROXMOX_BRIDGE_PORT}:8095"
+    "${vault_env_args[@]}"
+    -e PYTHONDONTWRITEBYTECODE=1
+    -e PYTHONUNBUFFERED=1
+    -e PROXMOX_PROXY_PORT="8095"
+    -e PROXMOX_UPSTREAM_URL="$PROXMOX_UPSTREAM_URL"
+    -e PROXMOX_API_KEY="$PROXMOX_API_KEY"
+    -e PROXMOX_UPDATE_API_KEY="${PROXMOX_UPDATE_API_KEY:-}"
+    -e PROXMOX_HOST="${PROXMOX_HOST:-}"
+    -e PROXMOX_PORT="${PROXMOX_PORT:-}"
+    -e PROXMOX_USER="${PROXMOX_USER:-}"
+    -e PROXMOX_TOKEN_NAME="${PROXMOX_TOKEN_NAME:-}"
+    -e PROXMOX_TOKEN_VALUE="${PROXMOX_TOKEN_VALUE:-}"
+    -e PROXMOX_VERIFY_SSL="${PROXMOX_VERIFY_SSL:-}"
+  )
+  if [[ -n "$PROXMOX_DEFAULT_ENVIRONMENT" ]]; then
+    proxmox_facade_args+=( -e PROXMOX_DEFAULT_ENVIRONMENT="$PROXMOX_DEFAULT_ENVIRONMENT" )
+  fi
+  if [[ -f "$PROXMOX_MCP_CONFIG_FILE" ]]; then
+    proxmox_facade_args+=(
+      -v "$PROXMOX_MCP_CONFIG_FILE:/app/proxmox-config/config.json:ro"
+      -e PROXMOX_MCP_CONFIG="/app/proxmox-config/config.json"
+    )
+  fi
+
+  ensure_container "$PROXMOX_BRIDGE_CONTAINER" \
+    "${proxmox_facade_args[@]}" \
+    -v "$PROXMOX_MCP_DIR/proxmox-openapi-facade.py:/opt/fortisai/proxmox-openapi-facade.py:ro" \
+    docker.io/python:3.11-slim \
+    python /opt/fortisai/proxmox-openapi-facade.py
+else
+  echo "Skipped $PROXMOX_BRIDGE_CONTAINER (Proxmox config not detected; set PROXMOX_BRIDGE_ENABLED=true to force)"
+fi
+
+echo "MCP OpenAPI bridges started."
+echo "SQLcl bridge: http://127.0.0.1:${SQLCL_BRIDGE_PORT}/openapi.json"
+echo "n8n bridge:   http://127.0.0.1:${N8N_BRIDGE_PORT}/openapi.json"
+echo "dify bridge:  http://127.0.0.1:${DIFY_BRIDGE_PORT}/openapi.json"
+echo "debug bridge: http://127.0.0.1:${DEBUG_BRIDGE_PORT}/openapi.json"
+echo "codeindexer bridge: http://127.0.0.1:${CODEINDEXER_BRIDGE_PORT}/openapi.json"
+echo "websearch bridge:   http://127.0.0.1:${WEBSEARCH_BRIDGE_PORT}/openapi.json"
+echo "daytona bridge:     http://127.0.0.1:${DAYTONA_BRIDGE_PORT}/openapi.json"
+echo "composio local MCP: http://127.0.0.1:${COMPOSIO_LOCAL_HOST_PORT}/mcp"
+echo "composio bridge:    http://127.0.0.1:${COMPOSIO_BRIDGE_PORT}/openapi.json"
+echo "openmetadata bridge: http://127.0.0.1:${OPENMETADATA_BRIDGE_PORT}/openapi.json"
+echo "aol imap bridge:    http://127.0.0.1:${AOL_IMAP_BRIDGE_PORT}/openapi.json"
+
+if [[ "$proxmox_configured" == "true" ]]; then
+  echo "proxmox bridge: http://127.0.0.1:${PROXMOX_BRIDGE_PORT}/openapi.json"
+fi

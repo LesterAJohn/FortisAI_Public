@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  oracle-node-api:
+    container_name: fortisai-oracle-node-api
+    privileged: true
+    security_opt:
+      - label=disable
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PORT=8090
+      - SQLCL_RUNTIME_BIN=${SQLCL_RUNTIME_BIN:-podman}
+      - SQLCL_CONTAINER_NAME=${SQLCL_CONTAINER_NAME:-fortisai-sqlcl}
+      - SQLCL_TIMEOUT_MS=${SQLCL_TIMEOUT_MS:-30000}
+      - CONTAINER_HOST=${CONTAINER_HOST:-unix:///tmp/podman.sock}
+      - FORTISAI_VAULT_ADDR=${FORTISAI_VAULT_ADDR:-http://fortisai-vault.fortisai.local:8200}
+      - VAULT_ADDR=${VAULT_ADDR:-http://fortisai-vault.fortisai.local:8200}
+      - VAULT_TOKEN=${VAULT_TOKEN:-}
+    ports:
+      - "8090:8090"
+    volumes:
+      - ${PODMAN_SOCKET_PATH:-/run/user/1001/podman/podman.sock}:/tmp/podman.sock:rw
+    networks:
+      - fortisai-shared
+    restart: unless-stopped
+
+networks:
+  fortisai-shared:
+    name: ${FORTISAI_SHARED_NETWORK:-fortisai-dev-net}
+    external: true

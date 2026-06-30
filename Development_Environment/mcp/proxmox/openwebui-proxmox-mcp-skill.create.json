@@ -1,0 +1,16 @@
+{
+  "id": "fortisai-proxmox-mcp-skill",
+  "name": "FortisAI Proxmox MCP Skill",
+  "description": "Operational playbook for Proxmox VM, disk, and container tasks through ProxmoxMCP-Plus.",
+  "content": "Use this skill only for Proxmox infrastructure tasks through the Proxmox MCP OpenAPI bridge.\n\nRequired OpenWebUI tool server:\n- mcp-proxmox-server\n\nExecution guide:\n1. Start with read-only discovery (nodes, VMs, containers, storage), then use get_vm_statistics or get_container_statistics for individual guest CPU, memory, disk, network, config, and RRD context.\n2. Restate exact target identifiers (node, vmid, storage, disk slot, snapshot) before mutating actions.\n3. Mutating actions require the FortisAI Proxmox update key and include VM/LXC start, stop, shutdown, reset, restart, clone, delete, restore, rollback, disk creation, resource updates, ISO changes, job cancel/retry, and VM command execution.\n4. For VM disk additions, use create_vm_disk with node, vmid, disk, storage, and size_gib; include cache or iothread only when they match the target VM pattern.\n5. Verify the returned before/after config, then verify guest visibility before partitioning, formatting, or mounting inside the VM.\n6. Prefer smallest safe change and include rollback guidance when possible.\n7. For failures, include HTTP status and endpoint called.\n\nSafety constraints:\n- Do not expose API tokens, SSH credentials, or sensitive host details.\n- Ask for confirmation before destructive operations (delete, restore over existing, hard stop, disk overwrite).\n- Do not overwrite an existing VM disk slot unless the user explicitly requested overwrite and the current disk mapping has been restated.\n- Prefer backup/snapshot operations before lifecycle-impacting mutations.",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "proxmox",
+      "mcp",
+      "openwebui",
+      "virtualization"
+    ]
+  },
+  "is_active": true
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://memory-server.fortisai.local:8000",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "repo-memory-server",
+      "description": "FortisAI repo memory OpenAPI server for graph memory entities, observations, and relations"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

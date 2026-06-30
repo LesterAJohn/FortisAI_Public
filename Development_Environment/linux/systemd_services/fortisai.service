@@ -1,0 +1,30 @@
+[Unit]
+Description=FortisAI local development stack
+After=network-online.target podman.service user@@DEPLOY_UID@.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@DEPLOY_USER@
+WorkingDirectory=@REPO_ROOT@/Development_Environment
+Environment=XDG_RUNTIME_DIR=/run/user/@DEPLOY_UID@
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/@DEPLOY_UID@/bus
+Environment=FORTISAI_WATCHDOG_DIR=@WATCHDOG_DIR@
+Environment=FORTISAI_ACTIVE_HOSTS_FILE=@RUNTIME_ACTIVE_HOSTS_FILE@
+Environment=FORTISAI_WATCHDOWN_FILE=@WATCHDOWN_FILE@
+# Bound shutdown cleanup so start/restart cannot hang indefinitely in all-down.
+ExecStartPre=-/usr/bin/timeout 900 @REPO_ROOT@/Development_Environment/linux/systemd_services/fortisai-control.sh stop
+ExecStartPre=-@REPO_ROOT@/Development_Environment/linux/systemd_services/fortisai-control.sh cleanup-prestart
+ExecStartPre=@REPO_ROOT@/Development_Environment/linux/systemd_services/fortisai-control.sh bootstrap-coredns
+ExecStart=@REPO_ROOT@/Development_Environment/linux/systemd_services/fortisai-control.sh start
+ExecStartPost=/usr/bin/bash -lc 'sleep 2; if @REPO_ROOT@/Development_Environment/linux/systemd_services/fortisai-control.sh is-primary; then /usr/bin/pgrep -f "fortisai-dev-helper.sh all-up" >/dev/null; else exit 0; fi'
+ExecStop=-/usr/bin/timeout 900 @REPO_ROOT@/Development_Environment/linux/systemd_services/fortisai-control.sh stop
+RemainAfterExit=yes
+TasksMax=infinity
+LimitNPROC=infinity
+LimitNOFILE=infinity
+#TimeoutStartSec=1800
+TimeoutStopSec=900
+
+[Install]
+WantedBy=multi-user.target

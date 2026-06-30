@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-websearch.fortisai.local:8097",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-websearch-server",
+      "description": "FortisAI Firecrawl MCP OpenAPI bridge for web search and URL scraping"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

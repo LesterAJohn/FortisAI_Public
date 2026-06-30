@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://filesystem-server.fortisai.local:8000",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "repo-filesystem-server",
+      "description": "FortisAI repo filesystem OpenAPI server for local file and directory operations"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

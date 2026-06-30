@@ -1,0 +1,43 @@
+{
+  "updatedAt": "2026-06-29T00:13:27.000Z",
+  "createdAt": "2026-06-28T23:47:58.770Z",
+  "id": "gm4lslDiy3ncIrLt",
+  "name": "Probe Workflow",
+  "description": null,
+  "active": false,
+  "isArchived": true,
+  "nodes": [],
+  "connections": {},
+  "settings": {},
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "2f2eedc3-983e-4024-88cd-6499659917c1",
+  "activeVersionId": null,
+  "versionCounter": 1,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-06-28T23:47:58.772Z",
+      "createdAt": "2026-06-28T23:47:58.772Z",
+      "role": "workflow:owner",
+      "workflowId": "gm4lslDiy3ncIrLt",
+      "projectId": "9BND8uib8sX4V4Nz",
+      "project": {
+        "updatedAt": "2026-06-13T21:40:33.623Z",
+        "createdAt": "2026-06-12T03:03:13.632Z",
+        "id": "9BND8uib8sX4V4Nz",
+        "name": "Lester John <lesterajohn@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "dbd6493a-618f-4729-a8db-c6078f13cdde"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

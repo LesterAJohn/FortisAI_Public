@@ -1,0 +1,19 @@
+[Unit]
+Description=FortisAI scheduled model update service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aiuser
+WorkingDirectory=/opt/home/aiuser/FortisAI/Development_Environment/linux/systemd_services
+Environment=VIRTUAL_ENV=/opt/home/aiuser/fortisai-dev/model-service-venv
+Environment=PATH=/opt/home/aiuser/fortisai-dev/model-service-venv/bin:/opt/home/aiuser/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/opt/home/aiuser/fortisai-dev/model-service-venv/bin/python /opt/home/aiuser/FortisAI/Development_Environment/linux/systemd_services/model_update.py
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

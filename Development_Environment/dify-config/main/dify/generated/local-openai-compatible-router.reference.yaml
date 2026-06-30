@@ -1,0 +1,1623 @@
+kind: fortisai.dify.openai-compatible-router.v1
+metadata:
+  name: local-openai-compatible-router
+  description: "Routes Dify requests across local OpenAI-compatible models using scheduled LLMDB-assisted classification."
+  generated_at: 2026-06-30T08:42:31.054Z
+  generated_by: "n8n local-llm-router-classification"
+provider:
+  name: fortisai-local-openai-compatible
+  type: openai_api_compatible
+  endpoint_base_url: http://fortisai-llama-server.fortisai.local:8011/v1
+  api_key_env: FORTISAI_LLAMA_OPENAI_API_KEY
+  classifier_model: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q5_k_m
+routing_policy:
+  default_request_type: analysis_research
+  request_type_order:
+    - coding
+    - agentic_tool_use
+    - reasoning_math
+    - analysis_research
+    - summarization
+    - classification_extraction
+    - embeddings
+    - long_context
+    - fast_chat
+    - multimodal_vision
+    - safety_guardrail
+  selection: "Use the first route whose match_hints or upstream classifier match the user request; fall back to analysis_research."
+  tool_use_policy:
+    request_type: agentic_tool_use
+    required_capabilities:
+      - tool_use
+    force_model_load: true
+    selection_policy: "Always route to the classified preferred model. Do not substitute an already-loaded model; allow the selected model to load when cold."
+routes:
+  - request_type: coding
+    description: "Software engineering, code generation, debugging, refactoring, and repository analysis."
+    primary_model: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0
+    fallback_models:
+      - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0-00001-of-00002
+      - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_k_m
+      - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_k_m-00001-of-00002
+    match_hints:
+      - code
+      - debug
+      - refactor
+      - repository
+      - function
+      - script
+      - software
+      - api
+  - request_type: agentic_tool_use
+    description: "Multi-step tool use, workflow orchestration, API planning, and autonomous task execution."
+    primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0
+    fallback_models:
+      - google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0
+      - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0
+      - qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0-00001-of-00002
+    match_hints:
+      - tool
+      - "tool use"
+      - "tool call"
+      - "function call"
+      - tool_choice
+      - workflow
+      - "api call"
+      - "mcp tool"
+      - orchestrate
+      - multi-step
+      - agent
+      - plan
+    required_capabilities:
+      - tool_use
+    force_model_load: true
+    selection_policy: force_selected_model_load
+  - request_type: reasoning_math
+    description: "Logical reasoning, math, proofs, planning, and careful multi-step analysis."
+    primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0
+    fallback_models: []
+    match_hints:
+      - reason
+      - prove
+      - math
+      - calculate
+      - logic
+      - derive
+      - constraint
+  - request_type: analysis_research
+    description: "Synthesis, research, comparison, policy/architecture analysis, and long-form answers."
+    primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0
+    fallback_models: []
+    match_hints:
+      - analyze
+      - compare
+      - research
+      - architecture
+      - strategy
+      - explain
+  - request_type: summarization
+    description: "Summaries, extraction, rewrite, document condensation, and structured notes."
+    primary_model: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0
+    fallback_models:
+      - microsoft__microsoft_Phi-3-mini-4k-instruct-gguf__Phi-3-mini-4k-instruct-q4
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m
+    match_hints:
+      - summarize
+      - rewrite
+      - brief
+      - "extract key points"
+      - condense
+  - request_type: classification_extraction
+    description: "Fast labels, routing decisions, entity extraction, JSON normalization, and triage."
+    primary_model: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0
+    fallback_models:
+      - microsoft__microsoft_Phi-3-mini-4k-instruct-gguf__Phi-3-mini-4k-instruct-q4
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m
+    match_hints:
+      - classify
+      - label
+      - extract
+      - json
+      - schema
+      - triage
+  - request_type: embeddings
+    description: "Stable text embedding generation for Qdrant, RAG, memory, and vector-store insertion."
+    primary_model: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0
+    fallback_models:
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q5_0
+    match_hints:
+      - embedding
+      - embeddings
+      - vector
+      - "semantic search"
+      - qdrant
+      - rag
+      - memory
+    required_capabilities:
+      - embeddings
+    selection_policy: classified_embedding_model
+  - request_type: long_context
+    description: "Large document or codebase context where context length matters more than raw speed."
+    primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0
+    fallback_models:
+      - qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q8_0
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0
+      - google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0
+    match_hints:
+      - "long document"
+      - "large context"
+      - "many files"
+      - "full report"
+      - codebase
+  - request_type: fast_chat
+    description: "Low-latency general chat, simple Q&A, drafts, and inexpensive repeated tasks."
+    primary_model: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0
+    fallback_models:
+      - microsoft__microsoft_Phi-3-mini-4k-instruct-gguf__Phi-3-mini-4k-instruct-q4
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m
+    match_hints:
+      - quick
+      - draft
+      - chat
+      - simple
+      - "short answer"
+  - request_type: multimodal_vision
+    description: "Vision-capable or image-adjacent tasks where a local multimodal model is available."
+    primary_model: google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0
+    fallback_models: []
+    match_hints:
+      - image
+      - vision
+      - screenshot
+      - chart
+      - diagram
+  - request_type: safety_guardrail
+    description: "Safety, policy, moderation, jailbreak checks, and guardrail review."
+    primary_model: claude__Negentropy-claude-opus-4.7-9B-Q8_0
+    fallback_models:
+      - qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q8_0
+      - qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0
+      - google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0
+    match_hints:
+      - safety
+      - policy
+      - moderation
+      - jailbreak
+      - risk
+models:
+  - model_id: claude__Negentropy-claude-opus-4.7-9B-Q8_0
+    provider: Anthropic
+    family: Claude
+    quantization: Q8_0
+    runnable: true
+    primary_capability: reasoning
+    secondary_capabilities:
+      - coding
+      - "tool use"
+      - memory
+      - "parallel tool execution"
+      - "extended thinking"
+      - tool_use
+    request_types:
+      - reasoning_math
+      - analysis_research
+      - agentic_tool_use
+    tool_use:
+      capable: true
+      score: 100
+      force_model_load: true
+      modes:
+        - tool_calling
+        - parallel_tool_execution
+        - tool_planning
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: tool use"
+        - "LLMDB capability: parallel tool execution"
+        - "LLMDB capability: agentic coding"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: false
+      score: 0
+      dimension_hint: null
+      evidence:
+        - "higher precision quantization is available"
+        - "large or reasoning/tool model is less ideal for embedding throughput"
+    quality_tier: high
+    routing_weight: 80
+    llmdb_reference:
+      id: claude-opus-4
+      name: "Claude Opus 4"
+      provider: Anthropic
+      aggregateScore: 55.109880000000004
+    rationale: "Matched local model naming to LLMDB entry Claude Opus 4; capabilities were combined with local quantization/name heuristics."
+    i: 1
+    r:
+      - reasoning_math
+      - analysis_research
+      - agentic_tool_use
+    u: true
+    t: high
+    w: 80
+    tool_use_capable: true
+  - model_id: google__google_gemma-4-12B-it-qat-q4_0-gguf__gemma-4-12b-it-qat-q4_0
+    provider: Google
+    family: Gemma
+    quantization: Q4_0
+    runnable: true
+    primary_capability: multimodal_or_vision_adjacent
+    secondary_capabilities:
+      - "on-device inference"
+      - "multimodal understanding"
+      - "audio transcription"
+      - translation
+      - "mix'n'match submodels"
+      - "offline operation"
+      - tool_use
+    request_types:
+      - multimodal_vision
+      - agentic_tool_use
+    tool_use:
+      capable: true
+      score: 100
+      force_model_load: true
+      modes:
+        - function_calling
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: function calling"
+        - "LLMDB capability: agentic experiences"
+        - "LLMDB capability: workflow automation"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: false
+      score: 0
+      dimension_hint: null
+      evidence:
+        - "large or reasoning/tool model is less ideal for embedding throughput"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: gemma-3n
+      name: "Gemma 3n"
+      provider: Google
+      aggregateScore: 56.150000000000006
+    rationale: "Matched local model naming to LLMDB entry Gemma 3n; capabilities were combined with local quantization/name heuristics."
+    i: 2
+    r:
+      - multimodal_vision
+      - agentic_tool_use
+    u: true
+    t: fast
+    w: 55
+    tool_use_capable: true
+  - model_id: microsoft__microsoft_Phi-3-mini-4k-instruct-gguf__Phi-3-mini-4k-instruct-q4
+    provider: Microsoft
+    family: Phi
+    quantization: Q4
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities: []
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+    tool_use:
+      capable: false
+      score: 0
+      force_model_load: false
+      modes: []
+      evidence: []
+    embedding:
+      capable: false
+      score: 25
+      dimension_hint: null
+      evidence:
+        - "small local model is suitable for recurring vector-store embedding work"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: phi-3
+      name: Phi-3
+      provider: Microsoft
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Phi-3; capabilities were combined with local quantization/name heuristics."
+    i: 3
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+    u: false
+    t: fast
+    w: 55
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q2_k
+    provider: Alibaba
+    family: Qwen
+    quantization: Q2_K
+    runnable: true
+    primary_capability: "language understanding"
+    secondary_capabilities:
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 43
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 4
+    r:
+      - embeddings
+    u: false
+    t: fast
+    w: 43
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q3_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q3_K
+    runnable: true
+    primary_capability: "language understanding"
+    secondary_capabilities:
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 43
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 5
+    r:
+      - embeddings
+    u: false
+    t: fast
+    w: 43
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_0
+    provider: Alibaba
+    family: Qwen
+    quantization: Q4_0
+    runnable: true
+    primary_capability: "language understanding"
+    secondary_capabilities:
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 6
+    r:
+      - embeddings
+    u: false
+    t: fast
+    w: 55
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q4_K
+    runnable: true
+    primary_capability: "language understanding"
+    secondary_capabilities:
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 7
+    r:
+      - embeddings
+    u: false
+    t: fast
+    w: 55
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q5_0
+    provider: Alibaba
+    family: Qwen
+    quantization: Q5_0
+    runnable: true
+    primary_capability: "language understanding"
+    secondary_capabilities:
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 8
+    r:
+      - embeddings
+    u: false
+    t: balanced
+    w: 50
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q5_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q5_K
+    runnable: true
+    primary_capability: "language understanding"
+    secondary_capabilities:
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 9
+    r:
+      - embeddings
+    u: false
+    t: balanced
+    w: 50
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q6_k
+    provider: Alibaba
+    family: Qwen
+    quantization: Q6_K
+    runnable: true
+    primary_capability: "language understanding"
+    secondary_capabilities:
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 10
+    r:
+      - embeddings
+    u: false
+    t: balanced
+    w: 50
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q8_0
+    provider: Alibaba
+    family: Qwen
+    quantization: Q8_0
+    runnable: true
+    primary_capability: "language understanding"
+    secondary_capabilities:
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+      - tool_use
+    request_types:
+      - embeddings
+      - agentic_tool_use
+    tool_use:
+      capable: true
+      score: 70
+      force_model_load: true
+      modes:
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 98
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "higher precision quantization is available"
+        - "LLMDB capability: embeddings"
+    quality_tier: high
+    routing_weight: 80
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 11
+    r:
+      - embeddings
+      - agentic_tool_use
+    u: true
+    t: high
+    w: 80
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q2_k
+    provider: Alibaba
+    family: Qwen
+    quantization: Q2_K
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities:
+      - "language understanding"
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 100
+      dimension_hint: 1536
+      evidence:
+        - "Qwen2.5 1.5B has a known 1536-dimensional local embedding output"
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "small local model is suitable for recurring vector-store embedding work"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 43
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 12
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    u: false
+    t: fast
+    w: 43
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q3_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q3_K
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities:
+      - "language understanding"
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 100
+      dimension_hint: 1536
+      evidence:
+        - "Qwen2.5 1.5B has a known 1536-dimensional local embedding output"
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "small local model is suitable for recurring vector-store embedding work"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 43
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 13
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    u: false
+    t: fast
+    w: 43
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_0
+    provider: Alibaba
+    family: Qwen
+    quantization: Q4_0
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities:
+      - "language understanding"
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 100
+      dimension_hint: 1536
+      evidence:
+        - "Qwen2.5 1.5B has a known 1536-dimensional local embedding output"
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "small local model is suitable for recurring vector-store embedding work"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 14
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    u: false
+    t: fast
+    w: 55
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q4_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q4_K
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities:
+      - "language understanding"
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 100
+      dimension_hint: 1536
+      evidence:
+        - "Qwen2.5 1.5B has a known 1536-dimensional local embedding output"
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "small local model is suitable for recurring vector-store embedding work"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 15
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    u: false
+    t: fast
+    w: 55
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q5_0
+    provider: Alibaba
+    family: Qwen
+    quantization: Q5_0
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities:
+      - "language understanding"
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 100
+      dimension_hint: 1536
+      evidence:
+        - "Qwen2.5 1.5B has a known 1536-dimensional local embedding output"
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "small local model is suitable for recurring vector-store embedding work"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 16
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    u: false
+    t: balanced
+    w: 50
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q5_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q5_K
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities:
+      - "language understanding"
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 100
+      dimension_hint: 1536
+      evidence:
+        - "Qwen2.5 1.5B has a known 1536-dimensional local embedding output"
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "small local model is suitable for recurring vector-store embedding work"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 17
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    u: false
+    t: balanced
+    w: 50
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q6_k
+    provider: Alibaba
+    family: Qwen
+    quantization: Q6_K
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities:
+      - "language understanding"
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    tool_use:
+      capable: false
+      score: 30
+      force_model_load: false
+      modes: []
+      evidence:
+        - "LLMDB capability: tool use"
+    embedding:
+      capable: true
+      score: 100
+      dimension_hint: 1536
+      evidence:
+        - "Qwen2.5 1.5B has a known 1536-dimensional local embedding output"
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "small local model is suitable for recurring vector-store embedding work"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 18
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+    u: false
+    t: balanced
+    w: 50
+    tool_use_capable: false
+  - model_id: qwen__Qwen_Qwen2.5-1.5B-Instruct-GGUF__qwen2.5-1.5b-instruct-q8_0
+    provider: Alibaba
+    family: Qwen
+    quantization: Q8_0
+    runnable: true
+    primary_capability: fast_local_inference
+    secondary_capabilities:
+      - "language understanding"
+      - "language generation"
+      - multilingual
+      - coding
+      - mathematics
+      - reasoning
+      - embeddings
+      - tool_use
+    request_types:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+      - agentic_tool_use
+    tool_use:
+      capable: true
+      score: 70
+      force_model_load: true
+      modes:
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 100
+      dimension_hint: 1536
+      evidence:
+        - "Qwen2.5 1.5B has a known 1536-dimensional local embedding output"
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "small local model is suitable for recurring vector-store embedding work"
+        - "higher precision quantization is available"
+        - "LLMDB capability: embeddings"
+    quality_tier: high
+    routing_weight: 80
+    llmdb_reference:
+      id: qwen-2
+      name: Qwen-2
+      provider: Alibaba
+      aggregateScore: 63.81666666666667
+    rationale: "Matched local model naming to LLMDB entry Qwen-2; capabilities were combined with local quantization/name heuristics."
+    i: 19
+    r:
+      - fast_chat
+      - classification_extraction
+      - summarization
+      - embeddings
+      - agentic_tool_use
+    u: true
+    t: high
+    w: 80
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q2_k
+    provider: Alibaba
+    family: Qwen
+    quantization: Q2_K
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 43
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 20
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: fast
+    w: 43
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q3_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q3_K
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 43
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 21
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: fast
+    w: 43
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0
+    provider: Alibaba
+    family: Qwen
+    quantization: Q4_0
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 22
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: fast
+    w: 55
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_0-00001-of-00002
+    provider: Alibaba
+    family: Qwen
+    quantization: Q4_0
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 23
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: fast
+    w: 55
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q4_K
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 24
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: fast
+    w: 55
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q4_k_m-00001-of-00002
+    provider: Alibaba
+    family: Qwen
+    quantization: Q4_K
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: fast
+    routing_weight: 55
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 25
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: fast
+    w: 55
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q5_0-00001-of-00002
+    provider: Alibaba
+    family: Qwen
+    quantization: Q5_0
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 26
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: balanced
+    w: 50
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q5_k_m
+    provider: Alibaba
+    family: Qwen
+    quantization: Q5_K
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 27
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: balanced
+    w: 50
+    tool_use_capable: true
+  - model_id: qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q5_k_m-00001-of-00002
+    provider: Alibaba
+    family: Qwen
+    quantization: Q5_K
+    runnable: true
+    primary_capability: code
+    secondary_capabilities:
+      - agentic_coding
+      - "code generation"
+      - "code repair"
+      - "code reasoning"
+      - "multilingual coding"
+      - tool_use
+      - embeddings
+    request_types:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    tool_use:
+      capable: true
+      score: 95
+      force_model_load: true
+      modes:
+        - tool_planning
+        - tool_calling
+        - classifier_reviewed
+      evidence:
+        - "LLMDB capability: agentic_coding"
+        - "LLMDB capability: tool use"
+        - "classifier agent marked the model as tool-use capable"
+    embedding:
+      capable: true
+      score: 90
+      dimension_hint: null
+      evidence:
+        - "Qwen2.5 family is suitable for lightweight local embedding support"
+        - "LLMDB capability: embeddings"
+    quality_tier: balanced
+    routing_weight: 50
+    llmdb_reference:
+      id: qwen-2-5-coder-32b
+      name: "Qwen2.5-Coder 32B"
+      provider: Alibaba
+      aggregateScore: 0
+    rationale: "Matched local model naming to LLMDB entry Qwen2.5-Coder 32B; capabilities were combined with local quantization/name heuristics."
+    i: 28
+    r:
+      - coding
+      - agentic_tool_use
+      - embeddings
+    u: true
+    t: balanced
+    w: 50
+    tool_use_capable: true
+llmdb:
+  source_url: https://llmdb.com/models
+  classification_source: classifier_agent
+notes:
+  - "Generated by local classifier agent with LLMDB references and deterministic route normalization."
+  - "Configured classifier model mistral__mistralai_Mistral-Small-3.2-24B-Instruct-2506-Q8_0 is not active; using active fallback qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q5_k_m."

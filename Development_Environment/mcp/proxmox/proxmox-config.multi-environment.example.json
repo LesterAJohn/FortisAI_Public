@@ -1,0 +1,52 @@
+{
+  "default_environment": "production",
+  "runtime_config_reload": true,
+  "environments": {
+    "production": {
+      "proxmox": {
+        "host": "pve1.example.local",
+        "port": 8006,
+        "verify_ssl": true,
+        "service": "PVE"
+      },
+      "auth": {
+        "user": "root@pam",
+        "token_name": "fortisai-mcp",
+        "token_value": "replace-with-production-token-secret"
+      },
+      "ssh": {
+        "host": "pve1.example.local",
+        "user": "root"
+      },
+      "jobs": {
+        "namespace": "production"
+      }
+    },
+    "lab": {
+      "proxmox": {
+        "host": "pve-lab.example.local",
+        "port": 8006,
+        "verify_ssl": false,
+        "service": "PVE"
+      },
+      "auth": {
+        "user": "root@pam",
+        "token_name": "fortisai-mcp",
+        "token_value": "replace-with-lab-token-secret"
+      },
+      "ssh": {
+        "host": "pve-lab.example.local",
+        "user": "root"
+      },
+      "jobs": {
+        "namespace": "lab"
+      }
+    }
+  },
+  "logging": {
+    "level": "INFO"
+  },
+  "security": {
+    "dev_mode": false
+  }
+}

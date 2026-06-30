@@ -1,0 +1,169 @@
+{
+  "name": "FortisAI - Daily OpenMetadata DB Catalog Update",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-0500-utc",
+      "name": "05:00 UTC Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-openmetadata.fortisai.local:8100/openmetadata_trigger_ingestion_pipeline",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"fqn\": \"tradeenginedb0_mongodb_metadata\"\n}"
+      },
+      "id": "trigger-mongodb",
+      "name": "Trigger MongoDB Ingestion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-openmetadata.fortisai.local:8100/openmetadata_trigger_ingestion_pipeline",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"fqn\": \"tradeenginedb_influxdb_metadata\"\n}"
+      },
+      "id": "trigger-influxdb",
+      "name": "Trigger InfluxDB Ingestion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "id": "wait-before-status",
+      "name": "Wait Before Status",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-openmetadata.fortisai.local:8100/openmetadata_get_ingestion_status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"fqn\": \"tradeenginedb0_mongodb_metadata\"\n}"
+      },
+      "id": "mongodb-status",
+      "name": "MongoDB Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fortisai-mcp-openapi-openmetadata.fortisai.local:8100/openmetadata_get_ingestion_status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"fqn\": \"tradeenginedb_influxdb_metadata\"\n}"
+      },
+      "id": "influxdb-status",
+      "name": "InfluxDB Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "05:00 UTC Daily": {
+      "main": [
+        [
+          {
+            "node": "Trigger MongoDB Ingestion",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trigger InfluxDB Ingestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger MongoDB Ingestion": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger InfluxDB Ingestion": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Status": {
+      "main": [
+        [
+          {
+            "node": "MongoDB Status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "InfluxDB Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "UTC",
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "staticData": null
+}

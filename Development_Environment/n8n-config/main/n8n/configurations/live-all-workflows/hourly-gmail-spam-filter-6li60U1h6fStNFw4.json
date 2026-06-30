@@ -1,0 +1,3428 @@
+{
+  "updatedAt": "2026-06-29T20:14:24.938Z",
+  "createdAt": "2026-06-27T19:27:37.392Z",
+  "id": "6li60U1h6fStNFw4",
+  "name": "Hourly Gmail Spam Filter",
+  "description": "Personal Gmail Mail Filter",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "hourly-schedule",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1920,
+        -256
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1904,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "q": "-label:AI-Reviewed",
+          "readStatus": "unread"
+        }
+      },
+      "id": "gmail-get-many",
+      "name": "Get Recent Inbox Messages",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1328,
+        576
+      ],
+      "webhookId": "b84b8450-a716-44ab-a472-9a3687689e38",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HjwIjvJqc9cNp1vl",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "fortisai",
+        "options": {}
+      },
+      "id": "openai-embeddings",
+      "name": "OpenAI Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        752
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "BRg6Y2VG0aR8Q9xZ",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search prior FortisAI Gmail spam decisions stored in Qdrant to help classify similar emails.",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gmail_spam_memory_d1536"
+        },
+        "topK": 5,
+        "options": {}
+      },
+      "id": "qdrant-memory-tool",
+      "name": "Qdrant Memory Tool",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -304,
+        464
+      ],
+      "credentials": {
+        "qdrantApi": {
+          "id": "ayg42ZyLqMcWRwWz",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: String(output.verdict ?? '').toUpperCase(),\n      reason: String(output.reason ?? '').trim(),\n      memory_used: Boolean(output.memory_used),\n      parsed: output,\n    };\n  }\n\n  const text = String(output ?? '').trim();\n\n  try {\n    const obj = JSON.parse(text);\n    return {\n      verdict: String(obj?.verdict ?? '').toUpperCase(),\n      reason: String(obj?.reason ?? '').trim(),\n      memory_used: Boolean(obj?.memory_used),\n      parsed: obj,\n    };\n  } catch {}\n\n  const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      const obj = JSON.parse(jsonMatch[0]);\n      return {\n        verdict: String(obj?.verdict ?? '').toUpperCase(),\n        reason: String(obj?.reason ?? '').trim(),\n        memory_used: Boolean(obj?.memory_used),\n        parsed: obj,\n      };\n    } catch {}\n  }\n\n  const verdictMatch = text.match(/\\b(SPAM|NOT_SPAM)\\b/i);\n  const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : '';\n  return {\n    verdict,\n    reason: text.slice(0, 240),\n    memory_used: /qdrant|memory/i.test(text),\n    parsed: null,\n  };\n}\n\nreturn items\n  .map((item) => {\n    const parsed = parseOutput(item?.json?.output);\n    return {\n      json: {\n        ...item.json,\n        verdict: parsed.verdict,\n        reason: parsed.reason || item?.json?.reason || '',\n        memory_used: parsed.memory_used || Boolean(item?.json?.memory_used),\n        output_parsed: parsed.parsed ?? item?.json?.output_parsed ?? null,\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter((item) => item.json.verdict === 'SPAM');\n"
+      },
+      "id": "keep-spam-only",
+      "name": "Keep Spam Only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst total = items.length;\nlet spam = 0;\nlet notSpam = 0;\nlet unknown = 0;\nlet memoryUsed = 0;\n\nconst samples = items.slice(0, 5).map((item, i) => {\n  const output = item?.json?.output;\n  const asText = typeof output === 'string' ? output : JSON.stringify(output ?? {});\n  const text = String(asText).trim();\n  const verdict = typeof output === 'object'\n    ? String(output?.verdict ?? '').toUpperCase()\n    : (text.match(/\\b(SPAM|NOT_SPAM)\\b/i)?.[1] || '').toUpperCase();\n\n  if (verdict === 'SPAM') spam += 1;\n  else if (verdict === 'NOT_SPAM') notSpam += 1;\n  else unknown += 1;\n\n  const usedMemory = typeof output === 'object'\n    ? Boolean(output?.memory_used)\n    : /qdrant|memory/i.test(text);\n  if (usedMemory) memoryUsed += 1;\n\n  return { index: i, verdict: verdict || 'UNKNOWN', usedMemory, preview: text.slice(0, 240) };\n});\n\nreturn [{\n  json: {\n    total,\n    spam,\n    notSpam,\n    unknown,\n    memoryUsed,\n    samples\n  }\n}];"
+      },
+      "id": "agent-output-audit",
+      "name": "Agent Output Audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nfunction boolValue(value) {\n  if (value === true || value === false) return value;\n  const text = String(value ?? '').trim().toLowerCase();\n  return ['true', 'yes', '1'].includes(text);\n}\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: firstString(output.verdict).toUpperCase(),\n      reason: firstString(output.reason),\n      memory_used: boolValue(output.memory_used),\n      parsed: output,\n      raw: JSON.stringify(output),\n    };\n  }\n\n  const text = String(output ?? '').trim();\n  const cleaned = text.replace(/^\\x60\\x60\\x60(?:json)?\\s*/i, '').replace(/\\x60\\x60\\x60$/i, '').trim();\n\n  for (const candidate of [cleaned, cleaned.match(/\\{[\\s\\S]*\\}/)?.[0]]) {\n    if (!candidate) continue;\n    try {\n      const obj = JSON.parse(candidate);\n      return {\n        verdict: firstString(obj?.verdict).toUpperCase(),\n        reason: firstString(obj?.reason),\n        memory_used: boolValue(obj?.memory_used),\n        parsed: obj,\n        raw: text,\n      };\n    } catch {}\n  }\n\n  const lineMatch = cleaned.match(/\\b(NOT_SPAM|SPAM)\\b\\s*(?:\\||:|-)?\\s*([\\s\\S]*)$/i);\n  const verdict = lineMatch ? lineMatch[1].toUpperCase() : '';\n  const reason = firstString(lineMatch?.[2], cleaned.slice(0, 240));\n  return {\n    verdict,\n    reason,\n    memory_used: /qdrant|memory/i.test(cleaned),\n    parsed: null,\n    raw: text,\n  };\n}\n\nreturn items\n  .map((item) => {\n    const source = item.json ?? {};\n    const parsed = parseOutput(source.output);\n    const verdict = firstString(source.verdict, parsed.verdict).toUpperCase();\n\n    if (verdict !== 'SPAM') {\n      return null;\n    }\n\n    const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n    const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n    const sourceFrom = firstString(source.sourceFrom, source.From, source.from);\n    const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject);\n    const sourceSnippet = firstString(source.sourceSnippet, source.snippet);\n    const reason = firstString(source.reason, parsed.reason, 'none');\n\n    const memoryText = [\n      `from: ${sourceFrom}`,\n      `subject: ${sourceSubject}`,\n      `snippet: ${sourceSnippet}`,\n      `verdict: ${verdict}`,\n      `reason: ${reason}`,\n      `labels: ${JSON.stringify(sourceLabels)}`,\n    ].join('\\n');\n\n    return {\n      json: {\n        ...source,\n        memoryText,\n        messageId: sourceMessageId,\n        verdict,\n        reason,\n        modelMemoryUsed: parsed.memory_used || Boolean(source.memory_used),\n        sourceFrom,\n        sourceSubject,\n        sourceSnippet,\n        sourceLabels,\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter(Boolean);\n"
+      },
+      "id": "build-memory-records",
+      "name": "Build Memory Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.memoryText }}",
+        "options": {}
+      },
+      "id": "memory-data-loader",
+      "name": "Memory Data Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        496,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gmail_spam_memory_d1536"
+        },
+        "options": {
+          "contentPayloadKey": "content",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "id": "qdrant-memory-insert",
+      "name": "Qdrant Memory Insert",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        384,
+        -208
+      ],
+      "credentials": {
+        "qdrantApi": {
+          "id": "ayg42ZyLqMcWRwWz",
+          "name": "Qdrant account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "SPAM"
+        ]
+      },
+      "id": "add-spam-label",
+      "name": "Add Spam Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        192
+      ],
+      "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HjwIjvJqc9cNp1vl",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "removeLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "INBOX"
+        ]
+      },
+      "id": "remove-inbox-label",
+      "name": "Remove Inbox Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1328,
+        96
+      ],
+      "webhookId": "1ab646b3-11b8-4d3b-ab81-bcf1401daa28",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HjwIjvJqc9cNp1vl",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m",
+          "mode": "list",
+          "cachedResultName": "qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0,
+          "timeout": 500000,
+          "maxRetries": 3
+        }
+      },
+      "id": "openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -512,
+        464
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openAiApi": {
+          "id": "Zb0S3tyNqPMmP4n6",
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classify this email as spam or not spam using retrieved Qdrant memory when relevant.\n\nFrom: {{$json.From || $json.from || \"\"}}\nSubject: {{$json.Subject || $json.subject || \"\"}}\nSnippet: {{$json.snippet || \"\"}}\nLabels: {{JSON.stringify($json.labels || [])}}\n\nIf Qdrant memory contains relevant past spam indicators, incorporate them into the decision.\n\nReturn ONLY valid JSON with this exact schema:\n{\n  \"verdict\": \"SPAM\" or \"NOT_SPAM\",\n  \"reason\": \"short reason\",\n  \"memory_used\": true or false\n}\n",
+        "options": {
+          "systemMessage": "You are an email spam classifier. You MUST call the Qdrant Memory Tool for every email before deciding. Then return ONLY JSON: {\"verdict\":\"SPAM|NOT_SPAM\",\"reason\":\"short reason\",\"memory_used\":true|false}. No markdown, no extra text.\n",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "passthroughBinaryImages": true,
+          "enableStreaming": false
+        }
+      },
+      "id": "ai-agent-spam-classifier",
+      "name": "AI Agent Spam Classifier",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -512,
+        224
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "q": "-label:AI-Reviewed",
+          "readStatus": "unread"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1328,
+        -304
+      ],
+      "id": "aa956bb8-e281-468b-bded-44836d7bf25d",
+      "name": "customerservice@aitradeengines.com",
+      "webhookId": "e324c69f-7fed-43e7-8466-7e3e3b492bcb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "42gHeUNeEc3bP2D3",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "q": "-label:AI-Reviewed",
+          "readStatus": "unread"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1328,
+        144
+      ],
+      "id": "bdf9f01c-9fc6-4803-ba6a-f9d874890768",
+      "name": "lesterajohn@oneserverx.com",
+      "webhookId": "eb412a07-57e1-4e80-b45d-8a4e3bd4d5fc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EpE5Gp9sF1BVe646",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "SPAM"
+        ]
+      },
+      "id": "4adb35b2-6496-4932-8072-0b1f40b775f0",
+      "name": "Add Spam Label1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        -272
+      ],
+      "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EpE5Gp9sF1BVe646",
+          "name": "Gmail account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "removeLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "INBOX"
+        ]
+      },
+      "id": "02045593-2520-414d-9f6a-9c53d2e47c37",
+      "name": "Remove Inbox Label1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1296,
+        -336
+      ],
+      "webhookId": "1ab646b3-11b8-4d3b-ab81-bcf1401daa28",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EpE5Gp9sF1BVe646",
+          "name": "Gmail account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "SPAM"
+        ]
+      },
+      "id": "ef29c950-3f02-4793-823b-23c9bed329e5",
+      "name": "Add Spam Label2",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1328,
+        656
+      ],
+      "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "42gHeUNeEc3bP2D3",
+          "name": "Gmail account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "removeLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "INBOX"
+        ]
+      },
+      "id": "57b0a7c7-0119-4deb-b748-b9fc6e1f7712",
+      "name": "Remove Inbox Label2",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        592
+      ],
+      "webhookId": "1ab646b3-11b8-4d3b-ab81-bcf1401daa28",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "42gHeUNeEc3bP2D3",
+          "name": "Gmail account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: String(output.verdict ?? '').toUpperCase(),\n      reason: String(output.reason ?? '').trim(),\n      memory_used: Boolean(output.memory_used),\n      parsed: output,\n    };\n  }\n\n  const text = String(output ?? '').trim();\n\n  try {\n    const obj = JSON.parse(text);\n    return {\n      verdict: String(obj?.verdict ?? '').toUpperCase(),\n      reason: String(obj?.reason ?? '').trim(),\n      memory_used: Boolean(obj?.memory_used),\n      parsed: obj,\n    };\n  } catch {}\n\n  const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      const obj = JSON.parse(jsonMatch[0]);\n      return {\n        verdict: String(obj?.verdict ?? '').toUpperCase(),\n        reason: String(obj?.reason ?? '').trim(),\n        memory_used: Boolean(obj?.memory_used),\n        parsed: obj,\n      };\n    } catch {}\n  }\n\n  const verdictMatch = text.match(/\\b(SPAM|NOT_SPAM)\\b/i);\n  const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : '';\n  return {\n    verdict,\n    reason: text.slice(0, 240),\n    memory_used: /qdrant|memory/i.test(text),\n    parsed: null,\n  };\n}\n\nreturn items\n  .map((item) => {\n    const parsed = parseOutput(item?.json?.output);\n    return {\n      json: {\n        ...item.json,\n        verdict: parsed.verdict,\n        reason: parsed.reason || item?.json?.reason || '',\n        memory_used: parsed.memory_used || Boolean(item?.json?.memory_used),\n        output_parsed: parsed.parsed ?? item?.json?.output_parsed ?? null,\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter((item) => item.json.verdict === 'SPAM');\n"
+      },
+      "id": "6606b271-f4a0-4c49-b523-c6e10bb88eae",
+      "name": "Keep Spam Only1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: String(output.verdict ?? '').toUpperCase(),\n      reason: String(output.reason ?? '').trim(),\n      memory_used: Boolean(output.memory_used),\n      parsed: output,\n    };\n  }\n\n  const text = String(output ?? '').trim();\n\n  try {\n    const obj = JSON.parse(text);\n    return {\n      verdict: String(obj?.verdict ?? '').toUpperCase(),\n      reason: String(obj?.reason ?? '').trim(),\n      memory_used: Boolean(obj?.memory_used),\n      parsed: obj,\n    };\n  } catch {}\n\n  const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      const obj = JSON.parse(jsonMatch[0]);\n      return {\n        verdict: String(obj?.verdict ?? '').toUpperCase(),\n        reason: String(obj?.reason ?? '').trim(),\n        memory_used: Boolean(obj?.memory_used),\n        parsed: obj,\n      };\n    } catch {}\n  }\n\n  const verdictMatch = text.match(/\\b(SPAM|NOT_SPAM)\\b/i);\n  const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : '';\n  return {\n    verdict,\n    reason: text.slice(0, 240),\n    memory_used: /qdrant|memory/i.test(text),\n    parsed: null,\n  };\n}\n\nreturn items\n  .map((item) => {\n    const parsed = parseOutput(item?.json?.output);\n    return {\n      json: {\n        ...item.json,\n        verdict: parsed.verdict,\n        reason: parsed.reason || item?.json?.reason || '',\n        memory_used: parsed.memory_used || Boolean(item?.json?.memory_used),\n        output_parsed: parsed.parsed ?? item?.json?.output_parsed ?? null,\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter((item) => item.json.verdict === 'SPAM');\n"
+      },
+      "id": "7c55b367-0d48-4cb2-8695-e9c51d3d3f60",
+      "name": "Keep Spam Only2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ROUTE_MAILBOX = 'lester';\nconst SOURCE_MAILBOX = 'LesterAJohn@gmail.com';\nconst items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction headerValue(source, headerName) {\n  const headers = source?.headers ?? source?.payload?.headers ?? source?.message?.payload?.headers ?? [];\n  if (!Array.isArray(headers)) return '';\n  const wanted = String(headerName).toLowerCase();\n  const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n  return firstString(found?.value);\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n  const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'));\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n\n  return {\n    json: {\n      ...source,\n      routeMailbox: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceMessageId,\n      sourceThreadId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || source.id || '',\n      messageId: sourceMessageId || source.messageId || source.id || '',\n      threadId: sourceThreadId || source.threadId || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});\n"
+      },
+      "id": "d4b0f03a-73e0-4ff4-95a9-8b3e4a3f6c11",
+      "name": "Stamp Route Lester",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ROUTE_MAILBOX = 'customerservice';\nconst SOURCE_MAILBOX = 'customerservice@aitradeengines.com';\nconst items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction headerValue(source, headerName) {\n  const headers = source?.headers ?? source?.payload?.headers ?? source?.message?.payload?.headers ?? [];\n  if (!Array.isArray(headers)) return '';\n  const wanted = String(headerName).toLowerCase();\n  const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n  return firstString(found?.value);\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n  const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'));\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n\n  return {\n    json: {\n      ...source,\n      routeMailbox: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceMessageId,\n      sourceThreadId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || source.id || '',\n      messageId: sourceMessageId || source.messageId || source.id || '',\n      threadId: sourceThreadId || source.threadId || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});\n"
+      },
+      "id": "2f3d364f-88c3-4e85-bfca-f0e95a8d2d21",
+      "name": "Stamp Route CustomerService",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        -368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ROUTE_MAILBOX = 'oneserverx';\nconst SOURCE_MAILBOX = 'lesterajohn@oneserverx.com';\nconst items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction headerValue(source, headerName) {\n  const headers = source?.headers ?? source?.payload?.headers ?? source?.message?.payload?.headers ?? [];\n  if (!Array.isArray(headers)) return '';\n  const wanted = String(headerName).toLowerCase();\n  const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n  return firstString(found?.value);\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n  const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'));\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n\n  return {\n    json: {\n      ...source,\n      routeMailbox: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceMessageId,\n      sourceThreadId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || source.id || '',\n      messageId: sourceMessageId || source.messageId || source.id || '',\n      threadId: sourceThreadId || source.threadId || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});\n"
+      },
+      "id": "af0f6fbc-ec7e-43fa-9fbf-2ab11fb20f5e",
+      "name": "Stamp Route OneServerX",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c39f06d0-08ad-4afb-b5cc-eed87a713ea1",
+                    "leftValue": "={{ $json.To }}",
+                    "rightValue": "oneserverx",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "3574db4e-7065-4799-abf7-df53fd358bcf",
+                    "leftValue": "={{ $json.To }}",
+                    "rightValue": "lesterajohn",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4c1ca867-33d8-4a5f-a0fa-0597ec38d55c",
+                    "leftValue": "={{ $json.To }}",
+                    "rightValue": "customerservice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        528,
+        384
+      ],
+      "id": "88b2a3ab-9c77-4855-b8fd-81b11d14a233",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 15,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "unread"
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1328,
+        384
+      ],
+      "id": "50eac3c0-ff45-4e80-8e43-2c271c4900db",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HjwIjvJqc9cNp1vl",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 15,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "unread"
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1328,
+        -64
+      ],
+      "id": "e1ac80c4-ccc8-44a3-8622-0fe741253dc9",
+      "name": "Gmail Trigger1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EpE5Gp9sF1BVe646",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 15,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "unread"
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1328,
+        -512
+      ],
+      "id": "f69703f0-5d6c-4291-a113-4e807e604a8d",
+      "name": "Gmail Trigger2",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "42gHeUNeEc3bP2D3",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "Label_6285646204915650913"
+        ]
+      },
+      "id": "d936ee34-2db0-4d1c-b396-4371ebd1763f",
+      "name": "AI-Reviewed Label Added",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1088,
+        -64
+      ],
+      "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EpE5Gp9sF1BVe646",
+          "name": "Gmail account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "Label_4179337155355779634"
+        ]
+      },
+      "id": "9c126330-43b3-4cfc-91a2-1c0fc2113230",
+      "name": "AI-Reviewed Label Added1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        912
+      ],
+      "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "42gHeUNeEc3bP2D3",
+          "name": "Gmail account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "Label_5177685097457210105"
+        ]
+      },
+      "id": "3fd6479d-aa64-44a2-9bab-4cd865661488",
+      "name": "AI-Reviewed Label Added2",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        400
+      ],
+      "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HjwIjvJqc9cNp1vl",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nfunction boolValue(value) {\n  if (value === true || value === false) return value;\n  const text = String(value ?? '').trim().toLowerCase();\n  return ['true', 'yes', '1'].includes(text);\n}\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: firstString(output.verdict).toUpperCase(),\n      reason: firstString(output.reason),\n      memory_used: boolValue(output.memory_used),\n      parsed: output,\n      raw: JSON.stringify(output),\n    };\n  }\n\n  const text = String(output ?? '').trim();\n  const cleaned = text.replace(/^\\x60\\x60\\x60(?:json)?\\s*/i, '').replace(/\\x60\\x60\\x60$/i, '').trim();\n\n  for (const candidate of [cleaned, cleaned.match(/\\{[\\s\\S]*\\}/)?.[0]]) {\n    if (!candidate) continue;\n    try {\n      const obj = JSON.parse(candidate);\n      return {\n        verdict: firstString(obj?.verdict).toUpperCase(),\n        reason: firstString(obj?.reason),\n        memory_used: boolValue(obj?.memory_used),\n        parsed: obj,\n        raw: text,\n      };\n    } catch {}\n  }\n\n  const lineMatch = cleaned.match(/\\b(NOT_SPAM|SPAM)\\b\\s*(?:\\||:|-)?\\s*([\\s\\S]*)$/i);\n  const verdict = lineMatch ? lineMatch[1].toUpperCase() : '';\n  const reason = firstString(lineMatch?.[2], cleaned.slice(0, 240));\n  return {\n    verdict,\n    reason,\n    memory_used: /qdrant|memory/i.test(cleaned),\n    parsed: null,\n    raw: text,\n  };\n}\n\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const parsed = parseOutput(source.output);\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n  const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from);\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, source.sourceMailbox);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject);\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet);\n  const routeMailbox = firstString(source.routeMailbox);\n\n  const validationOk = sourceFrom.length > 0 && sourceSubject.length > 0 && (parsed.verdict === 'SPAM' || parsed.verdict === 'NOT_SPAM');\n\n  return {\n    json: {\n      ...source,\n      id: sourceMessageId || source.id || '',\n      messageId: sourceMessageId || source.messageId || source.id || '',\n      threadId: sourceThreadId || source.threadId || '',\n      To: sourceTo,\n      From: sourceFrom,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n      sourceMessageId,\n      sourceThreadId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      routeMailbox,\n      verdict: parsed.verdict,\n      reason: parsed.reason || source.reason || '',\n      memory_used: parsed.memory_used || Boolean(source.memory_used),\n      output_parsed: parsed.parsed ?? source.output_parsed ?? null,\n      output_raw: parsed.raw,\n      validationOk,\n      validationError: validationOk\n        ? ''\n        : `Missing required fields or verdict. from=${sourceFrom ? 'ok' : 'missing'} subject=${sourceSubject ? 'ok' : 'missing'} verdict=${parsed.verdict || 'missing'} route=${routeMailbox || 'missing'}`,\n    },\n    pairedItem: item.pairedItem,\n  };\n});\n"
+      },
+      "id": "b8a1f6f3-c58c-47b8-a341-a4e99532a9d2",
+      "name": "Validate AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "80c4866c-43bf-45f7-bf07-af10f7dcf174",
+                    "leftValue": "={{ $json.validationOk }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "db2fa48f-cd51-4fa5-b5f8-4794b4c9b327",
+      "name": "Validation Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        288,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map((item) => ({\n  json: {\n    level: 'warning',\n    workflow: 'Hourly Gmail Spam Filter - LesterAJohn@gmail.com',\n    messageId: item?.json?.id ?? '',\n    routeMailbox: item?.json?.routeMailbox ?? '',\n    validationError: item?.json?.validationError ?? 'validation failed',\n    outputPreview: String(item?.json?.output ?? '').slice(0, 500),\n  },\n}));\n"
+      },
+      "id": "dbf3d4d5-94fa-477f-8e95-4b06e7f2f6f4",
+      "name": "Validation Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f8beef2f-a918-4d6f-ae8c-aa0e1af61b16",
+                    "leftValue": "={{ $json.To }}",
+                    "rightValue": "oneserverx",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "90558b69-e120-4f2f-8bce-caa5af97fcb1",
+                    "leftValue": "={{ $json.To }}",
+                    "rightValue": "lester",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "39de53f4-46d8-4022-a80f-a44f33e7ce52",
+                    "leftValue": "={{ $json.To }}",
+                    "rightValue": "customerservice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f5dc859b-ee16-4c8f-b3c5-8ebcdc06e3c8",
+      "name": "Alert Route Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        624,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "Label_8142070712257295380"
+        ]
+      },
+      "id": "de643bdb-b548-47e4-9178-1712133afad3",
+      "name": "AI Alert Label Added",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        1168
+      ],
+      "webhookId": "dd5e6264-c584-4215-80b6-1278f5f7827f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EpE5Gp9sF1BVe646",
+          "name": "Gmail account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "Label_7298574865258768031"
+        ]
+      },
+      "id": "12736597-2255-491d-b6e1-adfd90f9b074",
+      "name": "AI Alert Label Added2",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        1344
+      ],
+      "webhookId": "1fdf41cf-0b47-4d43-8d6f-d2f1582988fd",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HjwIjvJqc9cNp1vl",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{$json.id}}",
+        "labelIds": [
+          "Label_8942894955676362390"
+        ]
+      },
+      "id": "2feadcc4-7db4-43bc-b291-bff1006087cf",
+      "name": "AI Alert Label Added1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        1568
+      ],
+      "webhookId": "c7509339-16bb-41e8-b69f-7b54e4fa6ef5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "42gHeUNeEc3bP2D3",
+          "name": "Gmail account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferInput2"
+            }
+          },
+          "includeUnpaired": false
+        }
+      },
+      "id": "merge-source-ai-output-1",
+      "name": "Merge Source With AI Output",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -192,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "q": "label:SPAM"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1088,
+        -1264
+      ],
+      "id": "2cba9027-81c0-437e-bcee-7756b79a5373",
+      "name": "customerservice@aitradeengines.com1",
+      "webhookId": "e324c69f-7fed-43e7-8466-7e3e3b492bcb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "42gHeUNeEc3bP2D3",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "q": "label:SPAM"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1088,
+        -1056
+      ],
+      "id": "f017c82d-4af6-414b-9f62-8cefa00b716d",
+      "name": "lesterajohn@oneserverx.com1",
+      "webhookId": "eb412a07-57e1-4e80-b45d-8a4e3bd4d5fc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EpE5Gp9sF1BVe646",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "q": "label:SPAM"
+        }
+      },
+      "id": "699d4f2e-e058-49bd-b956-b058e050cb74",
+      "name": "Get Recent Inbox Messages1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1088,
+        -832
+      ],
+      "webhookId": "b84b8450-a716-44ab-a472-9a3687689e38",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HjwIjvJqc9cNp1vl",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "messageId": "={{ $json.id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        -1312
+      ],
+      "id": "2d2c5fe4-81df-4234-97f2-c666b6a04e70",
+      "name": "customerservice@aitradeengines.com2",
+      "webhookId": "e324c69f-7fed-43e7-8466-7e3e3b492bcb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "42gHeUNeEc3bP2D3",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "messageId": "={{ $json.id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        -1088
+      ],
+      "id": "533ed657-ebec-47e4-93ca-5575ff2c20ee",
+      "name": "lesterajohn@oneserverx.com2",
+      "webhookId": "eb412a07-57e1-4e80-b45d-8a4e3bd4d5fc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EpE5Gp9sF1BVe646",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "messageId": "={{ $json.id }}"
+      },
+      "id": "78eae408-a456-4375-ac96-0c21a8398ca0",
+      "name": "Get Recent Inbox Messages2",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        -864
+      ],
+      "webhookId": "b84b8450-a716-44ab-a472-9a3687689e38",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HjwIjvJqc9cNp1vl",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nfunction inferRouteMailbox(to, sourceMailbox) {\n  const text = [to, sourceMailbox].join(' ').toLowerCase();\n  if (text.includes('customerservice')) return 'customerservice';\n  if (text.includes('oneserverx')) return 'oneserverx';\n  if (text.includes('lester')) return 'lester';\n  return 'unknown';\n}\n\nfunction inferSourceMailbox(routeMailbox, to) {\n  if (routeMailbox === 'customerservice') return 'customerservice@aitradeengines.com';\n  if (routeMailbox === 'oneserverx') return 'lesterajohn@oneserverx.com';\n  if (routeMailbox === 'lester') return 'LesterAJohn@gmail.com';\n  return firstString(to);\n}\n\nreturn items\n  .map((item) => {\n    const source = item.json ?? {};\n    const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n    const labelText = sourceLabels.map((label) => [label.id, label.name].join(' ')).join(' ').toUpperCase();\n    const hasSpamLabel = labelText.includes('SPAM');\n\n    if (!hasSpamLabel) {\n      return null;\n    }\n\n    const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n    const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n    const sourceFrom = firstString(source.sourceFrom, source.From, source.from);\n    const sourceTo = firstString(source.sourceTo, source.To, source.to);\n    const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject);\n    const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n    const routeMailbox = firstString(source.routeMailbox, inferRouteMailbox(sourceTo, source.sourceMailbox));\n    const sourceMailbox = firstString(source.sourceMailbox, inferSourceMailbox(routeMailbox, sourceTo));\n    const reason = 'Existing Gmail SPAM label harvested for FortisAI spam memory';\n\n    const memoryText = [\n      'source: gmail_spam_label_harvest',\n      `mailbox: ${sourceMailbox}`,\n      `routeMailbox: ${routeMailbox}`,\n      `messageId: ${sourceMessageId}`,\n      `threadId: ${sourceThreadId}`,\n      `from: ${sourceFrom}`,\n      `to: ${sourceTo}`,\n      `subject: ${sourceSubject}`,\n      `snippet: ${sourceSnippet}`,\n      'verdict: SPAM',\n      `reason: ${reason}`,\n      `labels: ${JSON.stringify(sourceLabels)}`,\n    ].join('\\n');\n\n    return {\n      json: {\n        ...source,\n        routeMailbox,\n        sourceMailbox,\n        sourceMessageId,\n        sourceThreadId,\n        sourceFrom,\n        sourceTo,\n        sourceSubject,\n        sourceSnippet,\n        sourceLabels,\n        id: sourceMessageId || source.id || '',\n        messageId: sourceMessageId || source.messageId || source.id || '',\n        threadId: sourceThreadId || source.threadId || '',\n        From: sourceFrom,\n        To: sourceTo,\n        Subject: sourceSubject,\n        snippet: sourceSnippet,\n        labels: sourceLabels,\n        verdict: 'SPAM',\n        reason,\n        memoryText,\n        metadata: {\n          source: 'gmail_spam_label_harvest',\n          routeMailbox,\n          sourceMailbox,\n          messageId: sourceMessageId,\n          threadId: sourceThreadId,\n          from: sourceFrom,\n          to: sourceTo,\n          subject: sourceSubject,\n          labels: sourceLabels,\n        },\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter(Boolean);\n"
+      },
+      "id": "build-spam-label-memory-records",
+      "name": "Build SPAM Label Memory Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        -1056
+      ]
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Inbox Messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "customerservice@aitradeengines.com",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "lesterajohn@oneserverx.com",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "customerservice@aitradeengines.com1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "lesterajohn@oneserverx.com1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Recent Inbox Messages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Inbox Messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "lesterajohn@oneserverx.com",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "customerservice@aitradeengines.com",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Memory Tool",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Qdrant Memory Insert",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Memory Records": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Memory Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memory Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Qdrant Memory Insert",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Spam Only": {
+      "main": [
+        [
+          {
+            "node": "Add Spam Label1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Spam Label": {
+      "main": [
+        [
+          {
+            "node": "Remove Inbox Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Inbox Messages": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route Lester",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Memory Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Spam Classifier": {
+      "main": [
+        [
+          {
+            "node": "Merge Source With AI Output",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "customerservice@aitradeengines.com": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route CustomerService",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lesterajohn@oneserverx.com": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route OneServerX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Spam Label1": {
+      "main": [
+        [
+          {
+            "node": "Remove Inbox Label1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Spam Label2": {
+      "main": [
+        [
+          {
+            "node": "Remove Inbox Label2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Spam Only1": {
+      "main": [
+        [
+          {
+            "node": "Add Spam Label2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Spam Only2": {
+      "main": [
+        [
+          {
+            "node": "Add Spam Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stamp Route OneServerX": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Source With AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stamp Route Lester": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Source With AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stamp Route CustomerService": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Spam Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Source With AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Keep Spam Only",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI-Reviewed Label Added",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Keep Spam Only2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI-Reviewed Label Added2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Keep Spam Only1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI-Reviewed Label Added1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route Lester",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route OneServerX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger2": {
+      "main": [
+        [
+          {
+            "node": "Stamp Route CustomerService",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI-Reviewed Label Added1": {
+      "main": [
+        []
+      ]
+    },
+    "AI-Reviewed Label Added": {
+      "main": [
+        []
+      ]
+    },
+    "AI-Reviewed Label Added2": {
+      "main": [
+        []
+      ]
+    },
+    "Validate AI Output": {
+      "main": [
+        [
+          {
+            "node": "Validation Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Switch": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validation Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Alert": {
+      "main": [
+        [
+          {
+            "node": "Alert Route Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Route Switch": {
+      "main": [
+        [
+          {
+            "node": "AI Alert Label Added",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Alert Label Added2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Alert Label Added1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Source With AI Output": {
+      "main": [
+        [
+          {
+            "node": "Validate AI Output",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Agent Output Audit",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Memory Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Inbox Messages1": {
+      "main": [
+        [
+          {
+            "node": "Build SPAM Label Memory Records",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Recent Inbox Messages2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lesterajohn@oneserverx.com1": {
+      "main": [
+        [
+          {
+            "node": "Build SPAM Label Memory Records",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "lesterajohn@oneserverx.com2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "customerservice@aitradeengines.com1": {
+      "main": [
+        [
+          {
+            "node": "Build SPAM Label Memory Records",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "customerservice@aitradeengines.com2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build SPAM Label Memory Records": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Memory Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": {
+    "node:Every Hour": {
+      "recurrenceRules": []
+    },
+    "node:Gmail Trigger": {
+      "Gmail Trigger": {
+        "lastTimeChecked": 1782854115,
+        "possibleDuplicates": [
+          "19f1a62e0f229f59"
+        ],
+        "pendingMessageIds": []
+      }
+    },
+    "node:Gmail Trigger1": {
+      "Gmail Trigger1": {
+        "lastTimeChecked": 1782760659,
+        "possibleDuplicates": [
+          "19f14d0dca27dc98"
+        ]
+      }
+    },
+    "node:Gmail Trigger2": {
+      "Gmail Trigger2": {
+        "lastTimeChecked": 1782851400,
+        "possibleDuplicates": [
+          "19f1a39759e90aa7",
+          "19f1a39731b32e09"
+        ]
+      }
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "d40dc25b-9219-47ae-9162-810c94e02b6f",
+  "activeVersionId": "d40dc25b-9219-47ae-9162-810c94e02b6f",
+  "versionCounter": 598,
+  "triggerCount": 4,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-06-27T19:27:37.394Z",
+      "createdAt": "2026-06-27T19:27:37.394Z",
+      "role": "workflow:owner",
+      "workflowId": "6li60U1h6fStNFw4",
+      "projectId": "9BND8uib8sX4V4Nz",
+      "project": {
+        "updatedAt": "2026-06-13T21:40:33.623Z",
+        "createdAt": "2026-06-12T03:03:13.632Z",
+        "id": "9BND8uib8sX4V4Nz",
+        "name": "Lester John <lesterajohn@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "dbd6493a-618f-4729-a8db-c6078f13cdde"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-30T18:05:36.767Z",
+    "createdAt": "2026-06-30T18:05:36.767Z",
+    "versionId": "d40dc25b-9219-47ae-9162-810c94e02b6f",
+    "workflowId": "6li60U1h6fStNFw4",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "hours"
+              }
+            ]
+          }
+        },
+        "id": "hourly-schedule",
+        "name": "Every Hour",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -1920,
+          -256
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "manual-trigger",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -1904,
+          368
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "filters": {
+            "q": "-label:AI-Reviewed",
+            "readStatus": "unread"
+          }
+        },
+        "id": "gmail-get-many",
+        "name": "Get Recent Inbox Messages",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -1328,
+          576
+        ],
+        "webhookId": "b84b8450-a716-44ab-a472-9a3687689e38",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "HjwIjvJqc9cNp1vl",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": "fortisai",
+          "options": {}
+        },
+        "id": "openai-embeddings",
+        "name": "OpenAI Embeddings",
+        "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          752
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "BRg6Y2VG0aR8Q9xZ",
+            "name": "OpenAI account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "mode": "retrieve-as-tool",
+          "toolDescription": "Search prior FortisAI Gmail spam decisions stored in Qdrant to help classify similar emails.",
+          "qdrantCollection": {
+            "__rl": true,
+            "mode": "id",
+            "value": "gmail_spam_memory_d1536"
+          },
+          "topK": 5,
+          "options": {}
+        },
+        "id": "qdrant-memory-tool",
+        "name": "Qdrant Memory Tool",
+        "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+        "typeVersion": 1.3,
+        "position": [
+          -304,
+          464
+        ],
+        "credentials": {
+          "qdrantApi": {
+            "id": "ayg42ZyLqMcWRwWz",
+            "name": "Qdrant account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: String(output.verdict ?? '').toUpperCase(),\n      reason: String(output.reason ?? '').trim(),\n      memory_used: Boolean(output.memory_used),\n      parsed: output,\n    };\n  }\n\n  const text = String(output ?? '').trim();\n\n  try {\n    const obj = JSON.parse(text);\n    return {\n      verdict: String(obj?.verdict ?? '').toUpperCase(),\n      reason: String(obj?.reason ?? '').trim(),\n      memory_used: Boolean(obj?.memory_used),\n      parsed: obj,\n    };\n  } catch {}\n\n  const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      const obj = JSON.parse(jsonMatch[0]);\n      return {\n        verdict: String(obj?.verdict ?? '').toUpperCase(),\n        reason: String(obj?.reason ?? '').trim(),\n        memory_used: Boolean(obj?.memory_used),\n        parsed: obj,\n      };\n    } catch {}\n  }\n\n  const verdictMatch = text.match(/\\b(SPAM|NOT_SPAM)\\b/i);\n  const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : '';\n  return {\n    verdict,\n    reason: text.slice(0, 240),\n    memory_used: /qdrant|memory/i.test(text),\n    parsed: null,\n  };\n}\n\nreturn items\n  .map((item) => {\n    const parsed = parseOutput(item?.json?.output);\n    return {\n      json: {\n        ...item.json,\n        verdict: parsed.verdict,\n        reason: parsed.reason || item?.json?.reason || '',\n        memory_used: parsed.memory_used || Boolean(item?.json?.memory_used),\n        output_parsed: parsed.parsed ?? item?.json?.output_parsed ?? null,\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter((item) => item.json.verdict === 'SPAM');\n"
+        },
+        "id": "keep-spam-only",
+        "name": "Keep Spam Only",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          848,
+          -176
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst total = items.length;\nlet spam = 0;\nlet notSpam = 0;\nlet unknown = 0;\nlet memoryUsed = 0;\n\nconst samples = items.slice(0, 5).map((item, i) => {\n  const output = item?.json?.output;\n  const asText = typeof output === 'string' ? output : JSON.stringify(output ?? {});\n  const text = String(asText).trim();\n  const verdict = typeof output === 'object'\n    ? String(output?.verdict ?? '').toUpperCase()\n    : (text.match(/\\b(SPAM|NOT_SPAM)\\b/i)?.[1] || '').toUpperCase();\n\n  if (verdict === 'SPAM') spam += 1;\n  else if (verdict === 'NOT_SPAM') notSpam += 1;\n  else unknown += 1;\n\n  const usedMemory = typeof output === 'object'\n    ? Boolean(output?.memory_used)\n    : /qdrant|memory/i.test(text);\n  if (usedMemory) memoryUsed += 1;\n\n  return { index: i, verdict: verdict || 'UNKNOWN', usedMemory, preview: text.slice(0, 240) };\n});\n\nreturn [{\n  json: {\n    total,\n    spam,\n    notSpam,\n    unknown,\n    memoryUsed,\n    samples\n  }\n}];"
+        },
+        "id": "agent-output-audit",
+        "name": "Agent Output Audit",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          48,
+          32
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nfunction boolValue(value) {\n  if (value === true || value === false) return value;\n  const text = String(value ?? '').trim().toLowerCase();\n  return ['true', 'yes', '1'].includes(text);\n}\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: firstString(output.verdict).toUpperCase(),\n      reason: firstString(output.reason),\n      memory_used: boolValue(output.memory_used),\n      parsed: output,\n      raw: JSON.stringify(output),\n    };\n  }\n\n  const text = String(output ?? '').trim();\n  const cleaned = text.replace(/^\\x60\\x60\\x60(?:json)?\\s*/i, '').replace(/\\x60\\x60\\x60$/i, '').trim();\n\n  for (const candidate of [cleaned, cleaned.match(/\\{[\\s\\S]*\\}/)?.[0]]) {\n    if (!candidate) continue;\n    try {\n      const obj = JSON.parse(candidate);\n      return {\n        verdict: firstString(obj?.verdict).toUpperCase(),\n        reason: firstString(obj?.reason),\n        memory_used: boolValue(obj?.memory_used),\n        parsed: obj,\n        raw: text,\n      };\n    } catch {}\n  }\n\n  const lineMatch = cleaned.match(/\\b(NOT_SPAM|SPAM)\\b\\s*(?:\\||:|-)?\\s*([\\s\\S]*)$/i);\n  const verdict = lineMatch ? lineMatch[1].toUpperCase() : '';\n  const reason = firstString(lineMatch?.[2], cleaned.slice(0, 240));\n  return {\n    verdict,\n    reason,\n    memory_used: /qdrant|memory/i.test(cleaned),\n    parsed: null,\n    raw: text,\n  };\n}\n\nreturn items\n  .map((item) => {\n    const source = item.json ?? {};\n    const parsed = parseOutput(source.output);\n    const verdict = firstString(source.verdict, parsed.verdict).toUpperCase();\n\n    if (verdict !== 'SPAM') {\n      return null;\n    }\n\n    const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n    const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n    const sourceFrom = firstString(source.sourceFrom, source.From, source.from);\n    const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject);\n    const sourceSnippet = firstString(source.sourceSnippet, source.snippet);\n    const reason = firstString(source.reason, parsed.reason, 'none');\n\n    const memoryText = [\n      `from: ${sourceFrom}`,\n      `subject: ${sourceSubject}`,\n      `snippet: ${sourceSnippet}`,\n      `verdict: ${verdict}`,\n      `reason: ${reason}`,\n      `labels: ${JSON.stringify(sourceLabels)}`,\n    ].join('\\n');\n\n    return {\n      json: {\n        ...source,\n        memoryText,\n        messageId: sourceMessageId,\n        verdict,\n        reason,\n        modelMemoryUsed: parsed.memory_used || Boolean(source.memory_used),\n        sourceFrom,\n        sourceSubject,\n        sourceSnippet,\n        sourceLabels,\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter(Boolean);\n"
+        },
+        "id": "build-memory-records",
+        "name": "Build Memory Records",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          32,
+          -144
+        ]
+      },
+      {
+        "parameters": {
+          "jsonMode": "expressionData",
+          "jsonData": "={{ $json.memoryText }}",
+          "options": {}
+        },
+        "id": "memory-data-loader",
+        "name": "Memory Data Loader",
+        "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+        "typeVersion": 1.1,
+        "position": [
+          496,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "insert",
+          "qdrantCollection": {
+            "__rl": true,
+            "mode": "id",
+            "value": "gmail_spam_memory_d1536"
+          },
+          "options": {
+            "contentPayloadKey": "content",
+            "metadataPayloadKey": "metadata"
+          }
+        },
+        "id": "qdrant-memory-insert",
+        "name": "Qdrant Memory Insert",
+        "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+        "typeVersion": 1.3,
+        "position": [
+          384,
+          -208
+        ],
+        "credentials": {
+          "qdrantApi": {
+            "id": "ayg42ZyLqMcWRwWz",
+            "name": "Qdrant account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "SPAM"
+          ]
+        },
+        "id": "add-spam-label",
+        "name": "Add Spam Label",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1104,
+          192
+        ],
+        "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "HjwIjvJqc9cNp1vl",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "removeLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "INBOX"
+          ]
+        },
+        "id": "remove-inbox-label",
+        "name": "Remove Inbox Label",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1328,
+          96
+        ],
+        "webhookId": "1ab646b3-11b8-4d3b-ab81-bcf1401daa28",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "HjwIjvJqc9cNp1vl",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m",
+            "mode": "list",
+            "cachedResultName": "qwen__Qwen_Qwen2.5-0.5B-Instruct-GGUF__qwen2.5-0.5b-instruct-q4_k_m"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0,
+            "timeout": 500000,
+            "maxRetries": 3
+          }
+        },
+        "id": "openai-chat-model",
+        "name": "OpenAI Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          -512,
+          464
+        ],
+        "retryOnFail": true,
+        "maxTries": 4,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "openAiApi": {
+            "id": "Zb0S3tyNqPMmP4n6",
+            "name": "OpenAI account 3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=Classify this email as spam or not spam using retrieved Qdrant memory when relevant.\n\nFrom: {{$json.From || $json.from || \"\"}}\nSubject: {{$json.Subject || $json.subject || \"\"}}\nSnippet: {{$json.snippet || \"\"}}\nLabels: {{JSON.stringify($json.labels || [])}}\n\nIf Qdrant memory contains relevant past spam indicators, incorporate them into the decision.\n\nReturn ONLY valid JSON with this exact schema:\n{\n  \"verdict\": \"SPAM\" or \"NOT_SPAM\",\n  \"reason\": \"short reason\",\n  \"memory_used\": true or false\n}\n",
+          "options": {
+            "systemMessage": "You are an email spam classifier. You MUST call the Qdrant Memory Tool for every email before deciding. Then return ONLY JSON: {\"verdict\":\"SPAM|NOT_SPAM\",\"reason\":\"short reason\",\"memory_used\":true|false}. No markdown, no extra text.\n",
+            "maxIterations": 3,
+            "returnIntermediateSteps": false,
+            "passthroughBinaryImages": true,
+            "enableStreaming": false
+          }
+        },
+        "id": "ai-agent-spam-classifier",
+        "name": "AI Agent Spam Classifier",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          -512,
+          224
+        ],
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "filters": {
+            "q": "-label:AI-Reviewed",
+            "readStatus": "unread"
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -1328,
+          -304
+        ],
+        "id": "aa956bb8-e281-468b-bded-44836d7bf25d",
+        "name": "customerservice@aitradeengines.com",
+        "webhookId": "e324c69f-7fed-43e7-8466-7e3e3b492bcb",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "42gHeUNeEc3bP2D3",
+            "name": "Gmail account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "filters": {
+            "q": "-label:AI-Reviewed",
+            "readStatus": "unread"
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -1328,
+          144
+        ],
+        "id": "bdf9f01c-9fc6-4803-ba6a-f9d874890768",
+        "name": "lesterajohn@oneserverx.com",
+        "webhookId": "eb412a07-57e1-4e80-b45d-8a4e3bd4d5fc",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "EpE5Gp9sF1BVe646",
+            "name": "Gmail account 3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "SPAM"
+          ]
+        },
+        "id": "4adb35b2-6496-4932-8072-0b1f40b775f0",
+        "name": "Add Spam Label1",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1072,
+          -272
+        ],
+        "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "EpE5Gp9sF1BVe646",
+            "name": "Gmail account 3"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "removeLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "INBOX"
+          ]
+        },
+        "id": "02045593-2520-414d-9f6a-9c53d2e47c37",
+        "name": "Remove Inbox Label1",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1296,
+          -336
+        ],
+        "webhookId": "1ab646b3-11b8-4d3b-ab81-bcf1401daa28",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "EpE5Gp9sF1BVe646",
+            "name": "Gmail account 3"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "SPAM"
+          ]
+        },
+        "id": "ef29c950-3f02-4793-823b-23c9bed329e5",
+        "name": "Add Spam Label2",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1328,
+          656
+        ],
+        "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "42gHeUNeEc3bP2D3",
+            "name": "Gmail account 2"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "removeLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "INBOX"
+          ]
+        },
+        "id": "57b0a7c7-0119-4deb-b748-b9fc6e1f7712",
+        "name": "Remove Inbox Label2",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1552,
+          592
+        ],
+        "webhookId": "1ab646b3-11b8-4d3b-ab81-bcf1401daa28",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "42gHeUNeEc3bP2D3",
+            "name": "Gmail account 2"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: String(output.verdict ?? '').toUpperCase(),\n      reason: String(output.reason ?? '').trim(),\n      memory_used: Boolean(output.memory_used),\n      parsed: output,\n    };\n  }\n\n  const text = String(output ?? '').trim();\n\n  try {\n    const obj = JSON.parse(text);\n    return {\n      verdict: String(obj?.verdict ?? '').toUpperCase(),\n      reason: String(obj?.reason ?? '').trim(),\n      memory_used: Boolean(obj?.memory_used),\n      parsed: obj,\n    };\n  } catch {}\n\n  const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      const obj = JSON.parse(jsonMatch[0]);\n      return {\n        verdict: String(obj?.verdict ?? '').toUpperCase(),\n        reason: String(obj?.reason ?? '').trim(),\n        memory_used: Boolean(obj?.memory_used),\n        parsed: obj,\n      };\n    } catch {}\n  }\n\n  const verdictMatch = text.match(/\\b(SPAM|NOT_SPAM)\\b/i);\n  const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : '';\n  return {\n    verdict,\n    reason: text.slice(0, 240),\n    memory_used: /qdrant|memory/i.test(text),\n    parsed: null,\n  };\n}\n\nreturn items\n  .map((item) => {\n    const parsed = parseOutput(item?.json?.output);\n    return {\n      json: {\n        ...item.json,\n        verdict: parsed.verdict,\n        reason: parsed.reason || item?.json?.reason || '',\n        memory_used: parsed.memory_used || Boolean(item?.json?.memory_used),\n        output_parsed: parsed.parsed ?? item?.json?.output_parsed ?? null,\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter((item) => item.json.verdict === 'SPAM');\n"
+        },
+        "id": "6606b271-f4a0-4c49-b523-c6e10bb88eae",
+        "name": "Keep Spam Only1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1104,
+          720
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: String(output.verdict ?? '').toUpperCase(),\n      reason: String(output.reason ?? '').trim(),\n      memory_used: Boolean(output.memory_used),\n      parsed: output,\n    };\n  }\n\n  const text = String(output ?? '').trim();\n\n  try {\n    const obj = JSON.parse(text);\n    return {\n      verdict: String(obj?.verdict ?? '').toUpperCase(),\n      reason: String(obj?.reason ?? '').trim(),\n      memory_used: Boolean(obj?.memory_used),\n      parsed: obj,\n    };\n  } catch {}\n\n  const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      const obj = JSON.parse(jsonMatch[0]);\n      return {\n        verdict: String(obj?.verdict ?? '').toUpperCase(),\n        reason: String(obj?.reason ?? '').trim(),\n        memory_used: Boolean(obj?.memory_used),\n        parsed: obj,\n      };\n    } catch {}\n  }\n\n  const verdictMatch = text.match(/\\b(SPAM|NOT_SPAM)\\b/i);\n  const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : '';\n  return {\n    verdict,\n    reason: text.slice(0, 240),\n    memory_used: /qdrant|memory/i.test(text),\n    parsed: null,\n  };\n}\n\nreturn items\n  .map((item) => {\n    const parsed = parseOutput(item?.json?.output);\n    return {\n      json: {\n        ...item.json,\n        verdict: parsed.verdict,\n        reason: parsed.reason || item?.json?.reason || '',\n        memory_used: parsed.memory_used || Boolean(item?.json?.memory_used),\n        output_parsed: parsed.parsed ?? item?.json?.output_parsed ?? null,\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter((item) => item.json.verdict === 'SPAM');\n"
+        },
+        "id": "7c55b367-0d48-4cb2-8695-e9c51d3d3f60",
+        "name": "Keep Spam Only2",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          864,
+          272
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ROUTE_MAILBOX = 'lester';\nconst SOURCE_MAILBOX = 'LesterAJohn@gmail.com';\nconst items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction headerValue(source, headerName) {\n  const headers = source?.headers ?? source?.payload?.headers ?? source?.message?.payload?.headers ?? [];\n  if (!Array.isArray(headers)) return '';\n  const wanted = String(headerName).toLowerCase();\n  const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n  return firstString(found?.value);\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n  const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'));\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n\n  return {\n    json: {\n      ...source,\n      routeMailbox: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceMessageId,\n      sourceThreadId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || source.id || '',\n      messageId: sourceMessageId || source.messageId || source.id || '',\n      threadId: sourceThreadId || source.threadId || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});\n"
+        },
+        "id": "d4b0f03a-73e0-4ff4-95a9-8b3e4a3f6c11",
+        "name": "Stamp Route Lester",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1024,
+          384
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ROUTE_MAILBOX = 'customerservice';\nconst SOURCE_MAILBOX = 'customerservice@aitradeengines.com';\nconst items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction headerValue(source, headerName) {\n  const headers = source?.headers ?? source?.payload?.headers ?? source?.message?.payload?.headers ?? [];\n  if (!Array.isArray(headers)) return '';\n  const wanted = String(headerName).toLowerCase();\n  const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n  return firstString(found?.value);\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n  const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'));\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n\n  return {\n    json: {\n      ...source,\n      routeMailbox: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceMessageId,\n      sourceThreadId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || source.id || '',\n      messageId: sourceMessageId || source.messageId || source.id || '',\n      threadId: sourceThreadId || source.threadId || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});\n"
+        },
+        "id": "2f3d364f-88c3-4e85-bfca-f0e95a8d2d21",
+        "name": "Stamp Route CustomerService",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1024,
+          -368
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const ROUTE_MAILBOX = 'oneserverx';\nconst SOURCE_MAILBOX = 'lesterajohn@oneserverx.com';\nconst items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction headerValue(source, headerName) {\n  const headers = source?.headers ?? source?.payload?.headers ?? source?.message?.payload?.headers ?? [];\n  if (!Array.isArray(headers)) return '';\n  const wanted = String(headerName).toLowerCase();\n  const found = headers.find((header) => String(header?.name ?? '').toLowerCase() === wanted);\n  return firstString(found?.value);\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n  const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from, headerValue(source, 'From'));\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, headerValue(source, 'To'), SOURCE_MAILBOX);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject, headerValue(source, 'Subject'));\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n\n  return {\n    json: {\n      ...source,\n      routeMailbox: ROUTE_MAILBOX,\n      sourceMailbox: SOURCE_MAILBOX,\n      sourceMessageId,\n      sourceThreadId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      id: sourceMessageId || source.id || '',\n      messageId: sourceMessageId || source.messageId || source.id || '',\n      threadId: sourceThreadId || source.threadId || '',\n      From: sourceFrom,\n      To: sourceTo,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n    },\n    pairedItem: item.pairedItem,\n  };\n});\n"
+        },
+        "id": "af0f6fbc-ec7e-43fa-9fbf-2ab11fb20f5e",
+        "name": "Stamp Route OneServerX",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1040,
+          48
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "c39f06d0-08ad-4afb-b5cc-eed87a713ea1",
+                      "leftValue": "={{ $json.To }}",
+                      "rightValue": "oneserverx",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "3574db4e-7065-4799-abf7-df53fd358bcf",
+                      "leftValue": "={{ $json.To }}",
+                      "rightValue": "lesterajohn",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "4c1ca867-33d8-4a5f-a0fa-0597ec38d55c",
+                      "leftValue": "={{ $json.To }}",
+                      "rightValue": "customerservice",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          528,
+          384
+        ],
+        "id": "88b2a3ab-9c77-4855-b8fd-81b11d14a233",
+        "name": "Switch"
+      },
+      {
+        "parameters": {
+          "pollTimes": {
+            "item": [
+              {
+                "mode": "everyX",
+                "value": 15,
+                "unit": "minutes"
+              }
+            ]
+          },
+          "filters": {
+            "readStatus": "unread"
+          }
+        },
+        "type": "n8n-nodes-base.gmailTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          -1328,
+          384
+        ],
+        "id": "50eac3c0-ff45-4e80-8e43-2c271c4900db",
+        "name": "Gmail Trigger",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "HjwIjvJqc9cNp1vl",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "pollTimes": {
+            "item": [
+              {
+                "mode": "everyX",
+                "value": 15,
+                "unit": "minutes"
+              }
+            ]
+          },
+          "filters": {
+            "readStatus": "unread"
+          }
+        },
+        "type": "n8n-nodes-base.gmailTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          -1328,
+          -64
+        ],
+        "id": "e1ac80c4-ccc8-44a3-8622-0fe741253dc9",
+        "name": "Gmail Trigger1",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "EpE5Gp9sF1BVe646",
+            "name": "Gmail account 3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "pollTimes": {
+            "item": [
+              {
+                "mode": "everyX",
+                "value": 15,
+                "unit": "minutes"
+              }
+            ]
+          },
+          "filters": {
+            "readStatus": "unread"
+          }
+        },
+        "type": "n8n-nodes-base.gmailTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          -1328,
+          -512
+        ],
+        "id": "f69703f0-5d6c-4291-a113-4e807e604a8d",
+        "name": "Gmail Trigger2",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "42gHeUNeEc3bP2D3",
+            "name": "Gmail account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "Label_6285646204915650913"
+          ]
+        },
+        "id": "d936ee34-2db0-4d1c-b396-4371ebd1763f",
+        "name": "AI-Reviewed Label Added",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1088,
+          -64
+        ],
+        "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "EpE5Gp9sF1BVe646",
+            "name": "Gmail account 3"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "Label_4179337155355779634"
+          ]
+        },
+        "id": "9c126330-43b3-4cfc-91a2-1c0fc2113230",
+        "name": "AI-Reviewed Label Added1",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1104,
+          912
+        ],
+        "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "42gHeUNeEc3bP2D3",
+            "name": "Gmail account 2"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "Label_5177685097457210105"
+          ]
+        },
+        "id": "3fd6479d-aa64-44a2-9bab-4cd865661488",
+        "name": "AI-Reviewed Label Added2",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1120,
+          400
+        ],
+        "webhookId": "fa015002-4f33-46c6-9537-01fa6104e6fa",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "HjwIjvJqc9cNp1vl",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nfunction boolValue(value) {\n  if (value === true || value === false) return value;\n  const text = String(value ?? '').trim().toLowerCase();\n  return ['true', 'yes', '1'].includes(text);\n}\n\nfunction parseOutput(output) {\n  if (output && typeof output === 'object') {\n    return {\n      verdict: firstString(output.verdict).toUpperCase(),\n      reason: firstString(output.reason),\n      memory_used: boolValue(output.memory_used),\n      parsed: output,\n      raw: JSON.stringify(output),\n    };\n  }\n\n  const text = String(output ?? '').trim();\n  const cleaned = text.replace(/^\\x60\\x60\\x60(?:json)?\\s*/i, '').replace(/\\x60\\x60\\x60$/i, '').trim();\n\n  for (const candidate of [cleaned, cleaned.match(/\\{[\\s\\S]*\\}/)?.[0]]) {\n    if (!candidate) continue;\n    try {\n      const obj = JSON.parse(candidate);\n      return {\n        verdict: firstString(obj?.verdict).toUpperCase(),\n        reason: firstString(obj?.reason),\n        memory_used: boolValue(obj?.memory_used),\n        parsed: obj,\n        raw: text,\n      };\n    } catch {}\n  }\n\n  const lineMatch = cleaned.match(/\\b(NOT_SPAM|SPAM)\\b\\s*(?:\\||:|-)?\\s*([\\s\\S]*)$/i);\n  const verdict = lineMatch ? lineMatch[1].toUpperCase() : '';\n  const reason = firstString(lineMatch?.[2], cleaned.slice(0, 240));\n  return {\n    verdict,\n    reason,\n    memory_used: /qdrant|memory/i.test(cleaned),\n    parsed: null,\n    raw: text,\n  };\n}\n\nreturn items.map((item) => {\n  const source = item.json ?? {};\n  const parsed = parseOutput(source.output);\n  const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n  const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n  const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n  const sourceFrom = firstString(source.sourceFrom, source.From, source.from);\n  const sourceTo = firstString(source.sourceTo, source.To, source.to, source.sourceMailbox);\n  const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject);\n  const sourceSnippet = firstString(source.sourceSnippet, source.snippet);\n  const routeMailbox = firstString(source.routeMailbox);\n\n  const validationOk = sourceFrom.length > 0 && sourceSubject.length > 0 && (parsed.verdict === 'SPAM' || parsed.verdict === 'NOT_SPAM');\n\n  return {\n    json: {\n      ...source,\n      id: sourceMessageId || source.id || '',\n      messageId: sourceMessageId || source.messageId || source.id || '',\n      threadId: sourceThreadId || source.threadId || '',\n      To: sourceTo,\n      From: sourceFrom,\n      Subject: sourceSubject,\n      snippet: sourceSnippet,\n      labels: sourceLabels,\n      sourceMessageId,\n      sourceThreadId,\n      sourceFrom,\n      sourceTo,\n      sourceSubject,\n      sourceSnippet,\n      sourceLabels,\n      routeMailbox,\n      verdict: parsed.verdict,\n      reason: parsed.reason || source.reason || '',\n      memory_used: parsed.memory_used || Boolean(source.memory_used),\n      output_parsed: parsed.parsed ?? source.output_parsed ?? null,\n      output_raw: parsed.raw,\n      validationOk,\n      validationError: validationOk\n        ? ''\n        : `Missing required fields or verdict. from=${sourceFrom ? 'ok' : 'missing'} subject=${sourceSubject ? 'ok' : 'missing'} verdict=${parsed.verdict || 'missing'} route=${routeMailbox || 'missing'}`,\n    },\n    pairedItem: item.pairedItem,\n  };\n});\n"
+        },
+        "id": "b8a1f6f3-c58c-47b8-a341-a4e99532a9d2",
+        "name": "Validate AI Output",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          48,
+          224
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "80c4866c-43bf-45f7-bf07-af10f7dcf174",
+                      "leftValue": "={{ $json.validationOk }}",
+                      "rightValue": true,
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "db2fa48f-cd51-4fa5-b5f8-4794b4c9b327",
+        "name": "Validation Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          288,
+          368
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nreturn items.map((item) => ({\n  json: {\n    level: 'warning',\n    workflow: 'Hourly Gmail Spam Filter - LesterAJohn@gmail.com',\n    messageId: item?.json?.id ?? '',\n    routeMailbox: item?.json?.routeMailbox ?? '',\n    validationError: item?.json?.validationError ?? 'validation failed',\n    outputPreview: String(item?.json?.output ?? '').slice(0, 500),\n  },\n}));\n"
+        },
+        "id": "dbf3d4d5-94fa-477f-8e95-4b06e7f2f6f4",
+        "name": "Validation Alert",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          720
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "f8beef2f-a918-4d6f-ae8c-aa0e1af61b16",
+                      "leftValue": "={{ $json.To }}",
+                      "rightValue": "oneserverx",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "90558b69-e120-4f2f-8bce-caa5af97fcb1",
+                      "leftValue": "={{ $json.To }}",
+                      "rightValue": "lester",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "39de53f4-46d8-4022-a80f-a44f33e7ce52",
+                      "leftValue": "={{ $json.To }}",
+                      "rightValue": "customerservice",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "f5dc859b-ee16-4c8f-b3c5-8ebcdc06e3c8",
+        "name": "Alert Route Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          624,
+          832
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "Label_8142070712257295380"
+          ]
+        },
+        "id": "de643bdb-b548-47e4-9178-1712133afad3",
+        "name": "AI Alert Label Added",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1104,
+          1168
+        ],
+        "webhookId": "dd5e6264-c584-4215-80b6-1278f5f7827f",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "EpE5Gp9sF1BVe646",
+            "name": "Gmail account 3"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "Label_7298574865258768031"
+          ]
+        },
+        "id": "12736597-2255-491d-b6e1-adfd90f9b074",
+        "name": "AI Alert Label Added2",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1104,
+          1344
+        ],
+        "webhookId": "1fdf41cf-0b47-4d43-8d6f-d2f1582988fd",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "HjwIjvJqc9cNp1vl",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "addLabels",
+          "messageId": "={{$json.id}}",
+          "labelIds": [
+            "Label_8942894955676362390"
+          ]
+        },
+        "id": "2feadcc4-7db4-43bc-b291-bff1006087cf",
+        "name": "AI Alert Label Added1",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1120,
+          1568
+        ],
+        "webhookId": "c7509339-16bb-41e8-b69f-7b54e4fa6ef5",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "42gHeUNeEc3bP2D3",
+            "name": "Gmail account 2"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combineBy": "combineByPosition",
+          "options": {
+            "clashHandling": {
+              "values": {
+                "resolveClash": "preferInput2"
+              }
+            },
+            "includeUnpaired": false
+          }
+        },
+        "id": "merge-source-ai-output-1",
+        "name": "Merge Source With AI Output",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          -192,
+          -48
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "filters": {
+            "q": "label:SPAM"
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -1088,
+          -1264
+        ],
+        "id": "2cba9027-81c0-437e-bcee-7756b79a5373",
+        "name": "customerservice@aitradeengines.com1",
+        "webhookId": "e324c69f-7fed-43e7-8466-7e3e3b492bcb",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "42gHeUNeEc3bP2D3",
+            "name": "Gmail account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "filters": {
+            "q": "label:SPAM"
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -1088,
+          -1056
+        ],
+        "id": "f017c82d-4af6-414b-9f62-8cefa00b716d",
+        "name": "lesterajohn@oneserverx.com1",
+        "webhookId": "eb412a07-57e1-4e80-b45d-8a4e3bd4d5fc",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "EpE5Gp9sF1BVe646",
+            "name": "Gmail account 3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "filters": {
+            "q": "label:SPAM"
+          }
+        },
+        "id": "699d4f2e-e058-49bd-b956-b058e050cb74",
+        "name": "Get Recent Inbox Messages1",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -1088,
+          -832
+        ],
+        "webhookId": "b84b8450-a716-44ab-a472-9a3687689e38",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "HjwIjvJqc9cNp1vl",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "delete",
+          "messageId": "={{ $json.id }}"
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -256,
+          -1312
+        ],
+        "id": "2d2c5fe4-81df-4234-97f2-c666b6a04e70",
+        "name": "customerservice@aitradeengines.com2",
+        "webhookId": "e324c69f-7fed-43e7-8466-7e3e3b492bcb",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "42gHeUNeEc3bP2D3",
+            "name": "Gmail account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "delete",
+          "messageId": "={{ $json.id }}"
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -256,
+          -1088
+        ],
+        "id": "533ed657-ebec-47e4-93ca-5575ff2c20ee",
+        "name": "lesterajohn@oneserverx.com2",
+        "webhookId": "eb412a07-57e1-4e80-b45d-8a4e3bd4d5fc",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "EpE5Gp9sF1BVe646",
+            "name": "Gmail account 3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "delete",
+          "messageId": "={{ $json.id }}"
+        },
+        "id": "78eae408-a456-4375-ac96-0c21a8398ca0",
+        "name": "Get Recent Inbox Messages2",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -256,
+          -864
+        ],
+        "webhookId": "b84b8450-a716-44ab-a472-9a3687689e38",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "HjwIjvJqc9cNp1vl",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const text = String(value).trim();\n    if (text) return text;\n  }\n  return '';\n}\n\nfunction normalizeLabels(labels) {\n  if (!Array.isArray(labels)) return [];\n  return labels\n    .map((label) => {\n      if (label && typeof label === 'object') {\n        const id = firstString(label.id, label.name);\n        const name = firstString(label.name, label.id);\n        return { id, name };\n      }\n      const value = firstString(label);\n      return { id: value, name: value };\n    })\n    .filter((label) => label.id || label.name);\n}\n\nfunction inferRouteMailbox(to, sourceMailbox) {\n  const text = [to, sourceMailbox].join(' ').toLowerCase();\n  if (text.includes('customerservice')) return 'customerservice';\n  if (text.includes('oneserverx')) return 'oneserverx';\n  if (text.includes('lester')) return 'lester';\n  return 'unknown';\n}\n\nfunction inferSourceMailbox(routeMailbox, to) {\n  if (routeMailbox === 'customerservice') return 'customerservice@aitradeengines.com';\n  if (routeMailbox === 'oneserverx') return 'lesterajohn@oneserverx.com';\n  if (routeMailbox === 'lester') return 'LesterAJohn@gmail.com';\n  return firstString(to);\n}\n\nreturn items\n  .map((item) => {\n    const source = item.json ?? {};\n    const sourceLabels = normalizeLabels(source.sourceLabels ?? source.labels ?? source.labelIds);\n    const labelText = sourceLabels.map((label) => [label.id, label.name].join(' ')).join(' ').toUpperCase();\n    const hasSpamLabel = labelText.includes('SPAM');\n\n    if (!hasSpamLabel) {\n      return null;\n    }\n\n    const sourceMessageId = firstString(source.sourceMessageId, source.messageId, source.id);\n    const sourceThreadId = firstString(source.sourceThreadId, source.threadId);\n    const sourceFrom = firstString(source.sourceFrom, source.From, source.from);\n    const sourceTo = firstString(source.sourceTo, source.To, source.to);\n    const sourceSubject = firstString(source.sourceSubject, source.Subject, source.subject);\n    const sourceSnippet = firstString(source.sourceSnippet, source.snippet, source.textPlain, source.textHtml);\n    const routeMailbox = firstString(source.routeMailbox, inferRouteMailbox(sourceTo, source.sourceMailbox));\n    const sourceMailbox = firstString(source.sourceMailbox, inferSourceMailbox(routeMailbox, sourceTo));\n    const reason = 'Existing Gmail SPAM label harvested for FortisAI spam memory';\n\n    const memoryText = [\n      'source: gmail_spam_label_harvest',\n      `mailbox: ${sourceMailbox}`,\n      `routeMailbox: ${routeMailbox}`,\n      `messageId: ${sourceMessageId}`,\n      `threadId: ${sourceThreadId}`,\n      `from: ${sourceFrom}`,\n      `to: ${sourceTo}`,\n      `subject: ${sourceSubject}`,\n      `snippet: ${sourceSnippet}`,\n      'verdict: SPAM',\n      `reason: ${reason}`,\n      `labels: ${JSON.stringify(sourceLabels)}`,\n    ].join('\\n');\n\n    return {\n      json: {\n        ...source,\n        routeMailbox,\n        sourceMailbox,\n        sourceMessageId,\n        sourceThreadId,\n        sourceFrom,\n        sourceTo,\n        sourceSubject,\n        sourceSnippet,\n        sourceLabels,\n        id: sourceMessageId || source.id || '',\n        messageId: sourceMessageId || source.messageId || source.id || '',\n        threadId: sourceThreadId || source.threadId || '',\n        From: sourceFrom,\n        To: sourceTo,\n        Subject: sourceSubject,\n        snippet: sourceSnippet,\n        labels: sourceLabels,\n        verdict: 'SPAM',\n        reason,\n        memoryText,\n        metadata: {\n          source: 'gmail_spam_label_harvest',\n          routeMailbox,\n          sourceMailbox,\n          messageId: sourceMessageId,\n          threadId: sourceThreadId,\n          from: sourceFrom,\n          to: sourceTo,\n          subject: sourceSubject,\n          labels: sourceLabels,\n        },\n      },\n      pairedItem: item.pairedItem,\n    };\n  })\n  .filter(Boolean);\n"
+        },
+        "id": "build-spam-label-memory-records",
+        "name": "Build SPAM Label Memory Records",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -656,
+          -1056
+        ]
+      }
+    ],
+    "connections": {
+      "Every Hour": {
+        "main": [
+          [
+            {
+              "node": "Get Recent Inbox Messages",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "customerservice@aitradeengines.com",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "lesterajohn@oneserverx.com",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "customerservice@aitradeengines.com1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "lesterajohn@oneserverx.com1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Get Recent Inbox Messages1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "Get Recent Inbox Messages",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "lesterajohn@oneserverx.com",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "customerservice@aitradeengines.com",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Embeddings": {
+        "ai_embedding": [
+          [
+            {
+              "node": "Qdrant Memory Tool",
+              "type": "ai_embedding",
+              "index": 0
+            },
+            {
+              "node": "Qdrant Memory Insert",
+              "type": "ai_embedding",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Memory Records": {
+        "main": [
+          [
+            {
+              "node": "Qdrant Memory Insert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Memory Data Loader": {
+        "ai_document": [
+          [
+            {
+              "node": "Qdrant Memory Insert",
+              "type": "ai_document",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Keep Spam Only": {
+        "main": [
+          [
+            {
+              "node": "Add Spam Label1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Add Spam Label": {
+        "main": [
+          [
+            {
+              "node": "Remove Inbox Label",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Recent Inbox Messages": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route Lester",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Qdrant Memory Tool": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent Spam Classifier": {
+        "main": [
+          [
+            {
+              "node": "Merge Source With AI Output",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "customerservice@aitradeengines.com": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route CustomerService",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "lesterajohn@oneserverx.com": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route OneServerX",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Add Spam Label1": {
+        "main": [
+          [
+            {
+              "node": "Remove Inbox Label1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Add Spam Label2": {
+        "main": [
+          [
+            {
+              "node": "Remove Inbox Label2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Keep Spam Only1": {
+        "main": [
+          [
+            {
+              "node": "Add Spam Label2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Keep Spam Only2": {
+        "main": [
+          [
+            {
+              "node": "Add Spam Label",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stamp Route OneServerX": {
+        "main": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Merge Source With AI Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stamp Route Lester": {
+        "main": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Merge Source With AI Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stamp Route CustomerService": {
+        "main": [
+          [
+            {
+              "node": "AI Agent Spam Classifier",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Merge Source With AI Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Switch": {
+        "main": [
+          [
+            {
+              "node": "Keep Spam Only",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "AI-Reviewed Label Added",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Keep Spam Only2",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "AI-Reviewed Label Added2",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Keep Spam Only1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "AI-Reviewed Label Added1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gmail Trigger": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route Lester",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gmail Trigger1": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route OneServerX",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gmail Trigger2": {
+        "main": [
+          [
+            {
+              "node": "Stamp Route CustomerService",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI-Reviewed Label Added1": {
+        "main": [
+          []
+        ]
+      },
+      "AI-Reviewed Label Added": {
+        "main": [
+          []
+        ]
+      },
+      "AI-Reviewed Label Added2": {
+        "main": [
+          []
+        ]
+      },
+      "Validate AI Output": {
+        "main": [
+          [
+            {
+              "node": "Validation Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validation Switch": {
+        "main": [
+          [
+            {
+              "node": "Switch",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Validation Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validation Alert": {
+        "main": [
+          [
+            {
+              "node": "Alert Route Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Route Switch": {
+        "main": [
+          [
+            {
+              "node": "AI Alert Label Added",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI Alert Label Added2",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI Alert Label Added1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge Source With AI Output": {
+        "main": [
+          [
+            {
+              "node": "Validate AI Output",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Agent Output Audit",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Build Memory Records",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Recent Inbox Messages1": {
+        "main": [
+          [
+            {
+              "node": "Build SPAM Label Memory Records",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Get Recent Inbox Messages2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "lesterajohn@oneserverx.com1": {
+        "main": [
+          [
+            {
+              "node": "Build SPAM Label Memory Records",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "lesterajohn@oneserverx.com2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "customerservice@aitradeengines.com1": {
+        "main": [
+          [
+            {
+              "node": "Build SPAM Label Memory Records",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "customerservice@aitradeengines.com2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build SPAM Label Memory Records": {
+        "main": [
+          [
+            {
+              "node": "Qdrant Memory Insert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "import",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-30T18:05:53.109Z",
+        "id": 194,
+        "workflowId": "6li60U1h6fStNFw4",
+        "versionId": "d40dc25b-9219-47ae-9162-810c94e02b6f",
+        "event": "activated",
+        "userId": "dbd6493a-618f-4729-a8db-c6078f13cdde"
+      },
+      {
+        "createdAt": "2026-06-30T18:05:54.189Z",
+        "id": 196,
+        "workflowId": "6li60U1h6fStNFw4",
+        "versionId": "d40dc25b-9219-47ae-9162-810c94e02b6f",
+        "event": "activated",
+        "userId": "dbd6493a-618f-4729-a8db-c6078f13cdde"
+      },
+      {
+        "createdAt": "2026-06-30T18:05:53.319Z",
+        "id": 195,
+        "workflowId": "6li60U1h6fStNFw4",
+        "versionId": "d40dc25b-9219-47ae-9162-810c94e02b6f",
+        "event": "deactivated",
+        "userId": "dbd6493a-618f-4729-a8db-c6078f13cdde"
+      }
+    ]
+  }
+}

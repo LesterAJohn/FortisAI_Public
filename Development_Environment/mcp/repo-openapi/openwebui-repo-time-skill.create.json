@@ -1,0 +1,16 @@
+{
+  "id": "fortisai-repo-time-skill",
+  "name": "FortisAI Repo Time Skill",
+  "description": "Operational playbook for time and timezone operations through the FortisAI repo time OpenAPI server.",
+  "content": "Use this skill only for time and timezone operations through the FortisAI repo time OpenAPI server.\n\nRequired OpenWebUI tool server:\n- repo-time-server\n\nScope:\n- Get current UTC or local time.\n- Format the current time.\n- Convert timestamps between timezones.\n- Calculate elapsed time.\n- Parse natural or ISO timestamp strings.\n- List valid IANA time zones.\n\nExecution guide:\n1. Prefer /get_current_utc_time for canonical timestamps.\n2. Use IANA timezone names, for example America/New_York or UTC.\n3. When converting time, include the input timestamp, source timezone, and target timezone.\n4. When calculating elapsed time, state the requested unit.\n5. Return exact timestamps and timezone names in the answer.\n\nEndpoint guide:\n- GET /get_current_utc_time\n- GET /get_current_local_time\n- POST /format_time\n- POST /convert_time\n- POST /elapsed_time\n- POST /parse_timestamp\n- GET /list_time_zones",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "repo",
+      "time",
+      "openapi",
+      "openwebui"
+    ]
+  },
+  "is_active": true
+}

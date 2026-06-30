@@ -1,0 +1,15 @@
+{
+  "id": "fortisai-codeindexer-mcp-search",
+  "name": "FortisAI CodeIndexer Skill",
+  "description": "CodeIndexer-focused playbook skill for semantic repository indexing and code search.",
+  "content": "Use this skill only for semantic code indexing and code search tasks in OpenWebUI.\n\nRequired OpenWebUI tool server:\n- mcp-codeindexer-server\n\nScope:\n- Index a repository or source tree before semantic search.\n- Search indexed code with natural-language questions.\n- Clear and rebuild an index when source paths or embeddings change.\n\nExecution guide:\n1. Use /codeindexer_connection_info first if you need to confirm the mounted workspace, Milvus address, or embedding endpoint.\n2. Use /codeindexer_index before /codeindexer_search when a path has not been indexed.\n3. Prefer the mounted FortisAI workspace path /workspace; host path /opt/home/aiuser/FortisAI is translated by the bridge.\n4. Use force: true only when rebuilding an existing index.\n5. For broad repository questions, search first, then quote only the relevant file paths and line summaries returned by CodeIndexer.\n6. If a bridge call fails, report the endpoint, path, and short error message. Do not expose API keys, Vault tokens, or container environment values.\n\nEndpoint guide:\n- GET /codeindexer_connection_info\n- GET /codeindexer_tools\n- POST /codeindexer_index\n- POST /codeindexer_search\n- POST /codeindexer_clear\n- POST /codeindexer_mcp_tool\n\nRecommended request shapes:\n{\"path\":\"/workspace\",\"force\":false,\"splitter\":\"ast\"}\n{\"path\":\"/workspace\",\"query\":\"Where is the Linux helper all-up sequence implemented?\",\"limit\":10}",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "codeindexer",
+      "mcp",
+      "openwebui"
+    ]
+  },
+  "is_active": true
+}

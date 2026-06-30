@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-daytona.fortisai.local:8098",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-daytona-server",
+      "description": "FortisAI Daytona MCP OpenAPI bridge for sandbox lifecycle and command execution"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

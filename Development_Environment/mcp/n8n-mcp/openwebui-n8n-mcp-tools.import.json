@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-n8n.fortisai.local:8092",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-n8n-server",
+      "description": "FortisAI n8n MCP OpenAPI bridge with native n8n MCP passthrough"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

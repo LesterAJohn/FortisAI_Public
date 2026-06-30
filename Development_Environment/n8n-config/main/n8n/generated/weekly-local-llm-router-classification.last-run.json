@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-06-30T08:42:31.054Z",
+  "openai_base_url": "http://fortisai-llama-server.fortisai.local:8011/v1",
+  "dify_openai_base_url": "http://fortisai-llama-server.fortisai.local:8011/v1",
+  "local_model_count": 28,
+  "fetched_local_model_count": 28,
+  "disabled_manifest_file": "/FortisAI/Development_Environment/llm_directory/disabled_models.json",
+  "disabled_model_count": 0,
+  "excluded_split_shard_model_count": 0,
+  "excluded_split_shard_models": [],
+  "excluded_disabled_model_count": 0,
+  "excluded_disabled_models": [],
+  "llmdb_model_count": 107,
+  "requested_classifier_model": "mistral__mistralai_Mistral-Small-3.2-24B-Instruct-2506-Q8_0",
+  "classifier_model": "qwen__Qwen_Qwen2.5-Coder-7B-Instruct-GGUF__qwen2.5-coder-7b-instruct-q5_k_m",
+  "classifier_model_changed": true,
+  "classification_source": "classifier_agent",
+  "classifier_error": null,
+  "outputs": {
+    "routerYamlFile": "/FortisAI/Development_Environment/dify-config/main/dify/configurations/local-openai-compatible-router.yaml",
+    "routerGeneratedYamlFile": "/FortisAI/Development_Environment/dify-config/main/dify/generated/local-openai-compatible-router.generated.yaml",
+    "routerReferenceYamlFile": "/FortisAI/Development_Environment/dify-config/main/dify/generated/local-openai-compatible-router.reference.yaml",
+    "classificationJsonFile": "/FortisAI/Development_Environment/dify-config/main/dify/generated/local-llm-classification.generated.json",
+    "modelSetupScriptFile": "/FortisAI/Development_Environment/dify-config/main/dify/generated/setup-openai-compatible-models.mjs",
+    "routerImportScriptFile": "/FortisAI/Development_Environment/dify-config/main/dify/generated/import-local-openai-compatible-router.mjs"
+  }
+}

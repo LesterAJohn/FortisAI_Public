@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-proxmox.fortisai.local:8095",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-proxmox-server",
+      "description": "FortisAI ProxmoxMCP-Plus OpenAPI bridge"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

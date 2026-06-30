@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://fortisai-mcp-openapi-codeindexer.fortisai.local:8096",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "mcp-codeindexer-server",
+      "description": "FortisAI CodeIndexer MCP OpenAPI bridge for semantic code indexing and search"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

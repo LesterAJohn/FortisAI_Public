@@ -1,0 +1,22 @@
+[
+  {
+    "url": "http://time-server.fortisai.local:8000",
+    "path": "openapi.json",
+    "type": "openapi",
+    "auth_type": "bearer",
+    "headers": null,
+    "key": "",
+    "config": {
+      "enable": true,
+      "function_name_filter_list": "",
+      "access_grants": []
+    },
+    "info": {
+      "id": "",
+      "name": "repo-time-server",
+      "description": "FortisAI repo time OpenAPI server for current time, timezone conversion, elapsed time, and timestamp parsing"
+    },
+    "spec_type": "url",
+    "spec": ""
+  }
+]

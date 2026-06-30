@@ -1,0 +1,16 @@
+{
+  "id": "fortisai-repo-memory-skill",
+  "name": "FortisAI Repo Memory Skill",
+  "description": "Operational playbook for graph memory operations through the FortisAI repo memory OpenAPI server.",
+  "content": "Use this skill only for local graph memory operations through the FortisAI repo memory OpenAPI server.\n\nRequired OpenWebUI tool server:\n- repo-memory-server\n\nScope:\n- Read the graph memory.\n- Search for existing nodes.\n- Open specific nodes.\n- Add observations and create relations.\n- Delete entities, observations, or relations only when explicitly requested.\n\nExecution guide:\n1. Start with /search_nodes or /read_graph before proposing memory changes.\n2. Use /open_nodes when exact node names are known.\n3. Prefer adding observations to existing entities when possible.\n4. For relation changes, restate source, relation type, and target.\n5. Keep returned memory summaries concise and include node names.\n\nEndpoint guide:\n- GET /read_graph\n- POST /search_nodes\n- POST /open_nodes\n- POST /add_observations\n- POST /create_relations\n- POST /delete_entities\n- POST /delete_observations\n- POST /delete_relations\n\nSafety guide:\n- Do not store credentials, tokens, private keys, or sensitive personal data.\n- Ask for confirmation before deleting entities, observations, or relations.",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "repo",
+      "memory",
+      "openapi",
+      "openwebui"
+    ]
+  },
+  "is_active": true
+}

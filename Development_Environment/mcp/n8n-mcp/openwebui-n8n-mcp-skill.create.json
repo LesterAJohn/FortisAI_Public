@@ -1,0 +1,16 @@
+{
+  "id": "fortisai-n8n-mcp-skill",
+  "name": "FortisAI n8n MCP Skill",
+  "description": "Operational playbook for n8n workflow tasks through the FortisAI MCP n8n bridge and native n8n MCP workflow tools.",
+  "content": "Use this skill for n8n workflow discovery, inspection, lifecycle operations, and native n8n MCP tool execution.\n\nRequired OpenWebUI tool server:\n- mcp-n8n-server\n\nEndpoint and auth guide:\n- Use n8n public API routes under /api/v1/* for workflow CRUD operations.\n- Use bridge MCP routes for native n8n MCP workflow capabilities:\n  - POST /n8n_mcp_list_tools\n  - POST /n8n_mcp_call_tool\n- Use header X-N8N-API-KEY with n8n API routes; MCP bearer auth is handled by the bridge from Vault-backed config.\n\nWorkflow procedure:\n1. Start with n8n_list_workflows to discover candidate workflows.\n2. Use n8n_get_workflow with the selected workflow id before proposing any update.\n3. Use n8n_mcp_list_tools to discover currently available native n8n MCP tools (including newly available workflow-oriented tools).\n4. Use n8n_mcp_call_tool with explicit tool name and arguments to execute native MCP workflow actions.\n5. When enabling/disabling workflows, restate exact workflow id and expected effect.\n6. Return concise summaries including workflow id, name, active state, and last updated timestamps.\n7. If API/bridge calls fail, include HTTP status, endpoint, and a retry suggestion.\n\nSafety constraints:\n- Do not expose API keys, bearer tokens, secrets, or credential fields from workflow payloads.\n- Do not perform destructive updates without explicit user approval.\n- Prefer read/list actions unless the user requested a mutation.",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "n8n",
+      "mcp",
+      "openwebui",
+      "workflow"
+    ]
+  },
+  "is_active": true
+}

@@ -1,0 +1,6 @@
+# Example Dify app configuration for chatbot
+name: chatbot
+mode: chat
+description: 'A simple chatbot app.'
+workflow:
+  # ...workflow definition here...

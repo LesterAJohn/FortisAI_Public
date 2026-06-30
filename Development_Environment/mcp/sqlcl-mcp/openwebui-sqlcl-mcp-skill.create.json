@@ -1,0 +1,17 @@
+{
+  "id": "fortisai-sqlcl-mcp-skill",
+  "name": "FortisAI SQLcl MCP Skill",
+  "description": "Operational playbook for Oracle SQL tasks through the FortisAI MCP SQLcl bridge.",
+  "content": "Use this skill for Oracle SQL read and execute operations via MCP bridge tools.\n\nRequired OpenWebUI tool server:\n- mcp-sqlcl-server\n\nSQL procedure:\n1. For SELECT operations, use sqlcl_query and include row limits where appropriate.\n2. For DDL/DML operations, use sqlcl_execute only after confirming intent and impact.\n3. Return concise output summaries: SQL type, row count/affected rows, and key identifiers.\n4. For troubleshooting, include SQL error messages and next-step remediation.\n5. If bridge/API calls fail, include HTTP status, endpoint, and a retry suggestion.\n\nSafety constraints:\n- Never reveal passwords, wallet secrets, or connection secrets.\n- Avoid DROP/TRUNCATE/DELETE without explicit user confirmation.\n- Prefer least-impact queries first (read-only checks before mutations).",
+  "meta": {
+    "tags": [
+      "fortisai",
+      "sqlcl",
+      "oracle",
+      "mcp",
+      "openwebui",
+      "database"
+    ]
+  },
+  "is_active": true
+}
